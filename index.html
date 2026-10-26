@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Surtido de Línea</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+html{-webkit-text-size-adjust:100%} body{margin:0} [hidden]{display:none!important} img{max-width:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Layout: barra de planta fija arriba, pestañas por rol, área de trabajo en tarjetas por estación (tablero andon). */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --panel-2:#f6f8fa; --line:#d5dbe2; --ink:#16202b; --ink-2:#4d5b6a; --ink-3:#7a8796;
+  --accent:#0f5f8c; --accent-ink:#ffffff; --accent-soft:#dcebf5;
+  --ok:#1d7a46; --ok-soft:#dcf1e4; --warn:#9a6200; --warn-soft:#fbecc9; --bad:#b3261e; --bad-soft:#f8dedb; --idle:#5b6878; --idle-soft:#e5e9ee;
+  --bar:#16202b; --bar-ink:#e7edf3;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --panel:#17202a; --panel-2:#1c2632; --line:#2b3846; --ink:#e5ebf1; --ink-2:#a9b6c3; --ink-3:#7c8a99;
+  --accent:#4fa8d8; --accent-ink:#06131c; --accent-soft:#163246;
+  --ok:#5cc98a; --ok-soft:#143323; --warn:#e8b04a; --warn-soft:#3a2c0f; --bad:#f07d74; --bad-soft:#3d1916; --idle:#93a1b0; --idle-soft:#232e3a;
+  --bar:#0a0f14; --bar-ink:#e5ebf1; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --panel:#17202a; --panel-2:#1c2632; --line:#2b3846; --ink:#e5ebf1; --ink-2:#a9b6c3; --ink-3:#7c8a99;
+  --accent:#4fa8d8; --accent-ink:#06131c; --accent-soft:#163246;
+  --ok:#5cc98a; --ok-soft:#143323; --warn:#e8b04a; --warn-soft:#3a2c0f; --bad:#f07d74; --bad-soft:#3d1916; --idle:#93a1b0; --idle-soft:#232e3a;
+  --bar:#0a0f14; --bar-ink:#e5ebf1; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);font-weight:600;letter-spacing:.01em;text-wrap:balance;margin:0}
+h2{font-size:26px}h3{font-size:19px}
+.mono,td.num,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-2)} .small{font-size:12px}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:600}
+
+/* barra superior */
+.top{background:var(--bar);color:var(--bar-ink);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:10px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-size:24px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.brand .tag{font-family:var(--f-mono);font-size:11px;opacity:.6}
+nav.tabs{display:flex;gap:2px;flex-wrap:wrap;flex:1}
+nav.tabs button{background:transparent;color:var(--bar-ink);border:0;border-bottom:3px solid transparent;padding:8px 12px;font:600 15px var(--f-display);text-transform:uppercase;letter-spacing:.06em;cursor:pointer;opacity:.7}
+nav.tabs button[aria-current="page"]{opacity:1;border-bottom-color:var(--warn)}
+nav.tabs button:hover{opacity:1}
+.who{display:flex;align-items:center;gap:10px;font-size:13px}
+.who .role{font-family:var(--f-mono);font-size:11px;padding:2px 6px;border:1px solid currentColor;border-radius:3px;opacity:.8}
+.who button{background:transparent;color:var(--bar-ink);border:1px solid #ffffff40;border-radius:4px;padding:4px 10px;cursor:pointer}
+.conn{font-family:var(--f-mono);font-size:11px;opacity:.6}
+
+main{padding-block:20px 60px}
+.view-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.view-head p{margin:4px 0 0;color:var(--ink-2);max-width:70ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.panel>.ph{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.panel>.pb{padding:16px}
+.stack{display:grid;gap:16px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px}
+@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}}
+
+/* formularios */
+form.row,.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.fld{display:grid;gap:4px;min-width:0}
+.fld label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);font-weight:600}
+input,select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:7px 9px;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.w-xs{width:80px}.w-s{width:120px}.w-m{width:170px}.w-l{width:240px}
+@media (max-width:520px){.w-l,.w-m{width:100%}.fld{flex:1 1 140px}}
+.btn{font:600 13px var(--f-body);border-radius:4px;padding:8px 14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--ink-3)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad);background:transparent;border-color:transparent;padding:4px 8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* tablas */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--panel-2)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+.empty{padding:28px 16px;text-align:center;color:var(--ink-2)}
+
+/* pills andon */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-bad{background:var(--bad-soft);color:var(--bad)} .p-idle{background:var(--idle-soft);color:var(--idle)}
+.p-acc{background:var(--accent-soft);color:var(--accent)}
+
+/* surtido */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:16px}
+@media (max-width:700px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.summary>div{background:var(--panel);padding:12px 16px}
+.summary .v{font:600 30px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.v.bad{color:var(--bad)} .v.ok{color:var(--ok)} .v.warn{color:var(--warn)}
+.stations{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:16px}
+.station .ph h3{display:flex;align-items:center;gap:10px}
+.station .ph .st-id{font-family:var(--f-mono);font-size:12px;background:var(--bar);color:var(--bar-ink);padding:2px 7px;border-radius:3px}
+.np-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.np-row:last-child{border-bottom:0}
+.np-row .np{font-family:var(--f-mono);font-weight:500;font-size:14px}
+.np-meta{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2)}
+.np-meta b{color:var(--ink);font-weight:500;font-family:var(--f-mono)}
+.np-act{display:flex;flex-direction:column;align-items:flex-end;gap:6px;justify-content:center}
+.trips{grid-column:1/-1;display:flex;gap:3px;flex-wrap:wrap}
+.trip{font-family:var(--f-mono);font-size:10.5px;padding:2px 5px;border-radius:3px;border:1px solid var(--line);color:var(--ink-2);background:var(--panel-2)}
+.trip.done{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.trip.late{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.trip.due{background:var(--bad-soft);color:var(--bad);border-color:transparent;font-weight:600}
+.trip.next{outline:2px solid var(--accent);outline-offset:-1px;color:var(--ink)}
+.plan-line{font-size:12px;color:var(--ink-2);margin-top:2px}
+
+/* líneas */
+.lines{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:16px}
+.line-card{border-top:6px solid var(--idle);overflow:hidden}
+.line-card.st-ok{border-top-color:var(--ok)} .line-card.st-soon{border-top-color:var(--warn)} .line-card.st-due{border-top-color:var(--bad)}
+.lc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:12px 16px 0}
+.lc-name{font:700 34px/1 var(--f-display);text-transform:uppercase;letter-spacing:.02em}
+.lc-pct{font:600 34px/1 var(--f-display)}
+.st-due .lc-pct{color:var(--bad)} .st-ok .lc-pct{color:var(--ok)}
+.lc-body{padding:10px 16px 16px;display:grid;gap:10px}
+.lc-body .meter{margin-top:0}
+.st-chips{display:flex;flex-wrap:wrap;gap:4px}
+.st-chip{font:500 11px var(--f-mono);padding:3px 7px;border-radius:3px;background:var(--ok-soft);color:var(--ok)}
+.st-chip.soon{background:var(--warn-soft);color:var(--warn)} .st-chip.due{background:var(--bad);color:#fff;font-weight:600}
+.pend{display:grid;gap:4px;background:var(--bad-soft);border-radius:4px;padding:8px 10px}
+.pend-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;font-size:12px;align-items:baseline}
+.pend-row .mono:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.late-by{color:var(--bad);font-weight:600;font-size:11px;white-space:nowrap}
+
+/* métricas */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px}
+@media (max-width:800px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{padding:14px 16px}
+.kpi .v{font:600 36px/1 var(--f-display);font-variant-numeric:tabular-nums;margin-top:6px}
+.kpi .s{font-size:12px;color:var(--ink-2);margin-top:4px}
+.meter{height:6px;background:var(--idle-soft);border-radius:3px;overflow:hidden;margin-top:10px}
+.meter>i{display:block;height:100%;background:var(--accent)}
+.bars{display:grid;gap:10px}
+.bar-row{display:grid;grid-template-columns:90px minmax(0,1fr) 110px;gap:10px;align-items:center;font-size:13px}
+.bar-track{height:18px;background:var(--idle-soft);border-radius:3px;position:relative;overflow:hidden}
+.bar-track>i{position:absolute;inset:0 auto 0 0;background:var(--ok)}
+.bar-track>s{position:absolute;inset:0 auto 0 0;background:var(--warn);text-decoration:none}
+
+/* login */
+.login{min-height:70vh;display:grid;place-items:center;padding-block:40px}
+.login .card{width:min(440px,100%);padding:28px}
+.login h2{font-size:34px;text-transform:uppercase;letter-spacing:.03em}
+.badge-in{font:500 28px var(--f-mono);letter-spacing:.12em;width:100%;padding:14px;text-align:center;margin-top:16px}
+.hint{font-size:12px;color:var(--ink-2);margin-top:10px}
+.err{color:var(--bad);font-size:13px;margin-top:8px;min-height:1.2em}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:#0009;display:grid;place-items:center;z-index:50;padding:16px}
+.modal{width:min(520px,100%);max-height:90vh;overflow:auto}
+.modal .pb{display:grid;gap:14px}
+.scan-ok{font-size:13px;color:var(--ok);font-weight:600;min-height:1.2em}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--bar);color:var(--bar-ink);padding:10px 16px;border-radius:5px;z-index:60;font-size:13px;max-width:calc(100% - 32px)}
+.note{font-size:12px;color:var(--ink-2);background:var(--panel-2);border:1px dashed var(--line);border-radius:4px;padding:8px 10px}
+@media (prefers-reduced-motion:no-preference){.np-row{transition:background .2s}}
+</style>
+</head>
+<body>
+
+<header class="top" id="top" hidden>
+  <div class="wrap">
+    <div class="brand"><h1>Surtido de Línea</h1><span class="tag" id="conn"></span></div>
+    <nav class="tabs" id="tabs"></nav>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+<main class="wrap" id="app"><div class="empty">Cargando…</div></main>
+<div id="modal-root"></div>
+
+<script>
+/* ===================== Almacén: Supabase (tablas sl_*, una fila = {id, data jsonb}) =====================
+   Cada tabla se lee completa (o filtrada por fecha) y se vuelve a leer cuando Realtime avisa de un cambio. */
+const Store={
+  sb:null, session:null, equipo:"",
+  init(){ this.sb=window.supabase.createClient(SL_CONFIG.supabaseUrl,SL_CONFIG.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}}); },
+  async fetch(col,filter){
+    const out={}; let from=0;
+    for(;;){
+      let q=this.sb.from("sl_"+col).select("id,data");
+      if(filter) q=q.eq("data->>"+filter.field,filter.value);
+      const {data,error}=await q.order("id").range(from,from+999);
+      if(error) throw error;
+      data.forEach(r=>{out[r.id]=Object.assign({},r.data,{_id:r.id});});
+      if(data.length<1000) break; from+=1000;
+    }
+    return out;
+  },
+  watch(col,cb,filter){
+    let alive=true, timer=null;
+    const load=async()=>{ try{ const m=await this.fetch(col,filter); if(alive) cb(m); }catch(e){ if(alive) toast("No se pudieron leer los datos ("+(e.message||e.code)+")."); } };
+    const soon=()=>{ clearTimeout(timer); timer=setTimeout(load,250); };
+    const ch=this.sb.channel("sl_"+col+"_"+newId())
+      .on("postgres_changes",{event:"*",schema:"public",table:"sl_"+col},soon)
+      .subscribe(st=>{ if(st==="SUBSCRIBED") soon(); });
+    load();
+    const onFocus=()=>soon(); window.addEventListener("focus",onFocus);
+    return ()=>{ alive=false; clearTimeout(timer); this.sb.removeChannel(ch); window.removeEventListener("focus",onFocus); };
+  },
+  async set(col,id,data){
+    const body=JSON.parse(JSON.stringify(data)); delete body._id;
+    const {error}=await this.sb.from("sl_"+col).upsert({id,data:body,actualizado:new Date().toISOString()});
+    if(error) throw error;
+  },
+  async insert(col,id,data){
+    const body=JSON.parse(JSON.stringify(data)); delete body._id;
+    const {error}=await this.sb.from("sl_"+col).insert({id,data:body});
+    if(error) throw error;
+  },
+  async del(col,id){
+    const {error}=await this.sb.from("sl_"+col).delete().eq("id",id);
+    if(error) throw error;
+  }
+};
+const safeId=s=>String(s).trim().replace(/[^A-Za-z0-9_\-.~:@+]/g,"-").slice(0,120)||"x";
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ===================== Estado ===================== */
+const S={gafetes:{},bom:{},plan:{},surtidos:{},config:{},
+  me:null, view:null, sel:{fecha:today(),turno:"",linea:"",bom:null}, ready:false};
+const DEFAULT_CFG={pct:20, tolerancia:10, turnos:{T1:{inicio:"06:00",fin:"14:00"},T2:{inicio:"14:00",fin:"22:00"},T3:{inicio:"22:00",fin:"06:00"}}};
+function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.pct)||20), tolerancia:Number(c.tolerancia)||DEFAULT_CFG.tolerancia, turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
+
+const ROLES={
+  admin:{label:"Administrador",tabs:["lineas","surtido","plan","bom","metricas","gafetes"]},
+  planeador:{label:"Planeador",tabs:["plan","bom","lineas","surtido","metricas"]},
+  materialista:{label:"Materialista",tabs:["lineas","surtido"]},
+  lider:{label:"Líder de línea",tabs:["lineas","surtido","metricas"]},
+  supervisor:{label:"Supervisor",tabs:["lineas","metricas","surtido","plan"]},
+  receptor:{label:"Recibe material (sin acceso)",tabs:[]}
+};
+const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",gafetes:"Gafetes y ajustes"};
+const can={
+  editPlan:()=>["admin","planeador"].includes(S.me?.rol),
+  confirm:()=>["admin","materialista"].includes(S.me?.rol),
+  admin:()=>S.me?.rol==="admin"
+};
+
+function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtT=d=>String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+const fmtN=(n,dp=0)=>Number(n).toLocaleString("es-MX",{maximumFractionDigits:dp,minimumFractionDigits:0});
+function userByBadge(b){ b=String(b||"").trim(); return Object.values(S.gafetes).find(u=>String(u.gafete)===b)||null; }
+function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3200); }
+
+/* ===================== Cálculo de surtido =====================
+   Por NP en estación: consumo/h = UPH × cant. por unidad.
+   Capacidad en estación = cantidad de empaque (o 1 h de consumo si no se indica).
+   Punto de reorden = capacidad × %(mín. 20 %). Se surte al llegar a ese punto,
+   reponiendo capacidad − punto de reorden. Frecuencia = reposición ÷ consumo/h. */
+function shiftStart(fecha,turno){
+  const t=cfg().turnos[turno]||{inicio:"06:00"}; const [h,m]=t.inicio.split(":").map(Number);
+  const d=new Date(fecha+"T00:00:00"); d.setHours(h,m||0,0,0); return d;
+}
+function planUph(p){ return Number(p.uph)||Number(S.bom[safeId(p.ensamble)]?.uph)||0; }
+function computeItems(p){
+  const b=S.bom[safeId(p.ensamble)]; if(!b) return {error:"Sin BOM para el ensamble "+p.ensamble, items:[]};
+  const uph=planUph(p); if(!uph) return {error:"Falta UPH para "+p.ensamble, items:[]};
+  const pct=cfg().pct/100, start=shiftStart(p.fecha,p.turno);
+  const items=(b.items||[]).map(it=>{
+    const qpu=Number(it.qtyPer)||1, rate=uph*qpu;
+    const cap=Number(it.empaque)>0?Number(it.empaque):Math.ceil(rate);
+    const rop=Math.ceil(cap*pct), repl=Math.max(1,cap-rop);
+    const intervalMin=repl/rate*60, total=Math.ceil(Number(p.cantidad)*qpu);
+    const trips=[]; let rem=total, k=0;
+    while(rem>0 && k<500){
+      const q=Math.min(k===0?cap:repl,rem);
+      trips.push({k,qty:q,at:new Date(start.getTime()+k*intervalMin*60000),id:safeId(p._id+"__"+it.estacion+"__"+it.np+"__"+k)});
+      rem-=q; k++;
+    }
+    return {np:it.np,desc:it.desc,estacion:String(it.estacion||"—"),qpu,rate,cap,rop,repl,intervalMin,total,trips};
+  });
+  return {items};
+}
+function tripStatus(t,now){
+  const done=S.surtidos[t.id];
+  if(done){ const late=(done.ts-t.at.getTime())>cfg().tolerancia*60000; return {key:late?"late":"done",done}; }
+  if(now>t.at.getTime()) return {key:"due"};
+  if(t.at.getTime()-now<15*60000) return {key:"soon"};
+  return {key:"sched"};
+}
+
+/* ===================== Arranque ===================== */
+(async function boot(){
+  const app=document.getElementById("app");
+  if(!window.supabase||!window.SL_CONFIG){ app.innerHTML='<div class="panel empty">No se pudo cargar la conexión con Supabase. Revisa el internet del equipo y el archivo config.js.</div>'; return; }
+  Store.init();
+  Store.sb.auth.onAuthStateChange(ev=>{ if(ev==="SIGNED_OUT") location.reload(); });
+  const {data:{session}}=await Store.sb.auth.getSession();
+  if(!session) return renderDeviceLogin(app);
+  Store.session=session;
+  const {data:eq,error}=await Store.sb.from("sl_equipos").select("nombre").eq("user_id",session.user.id).maybeSingle();
+  if(error||!eq) return renderNotAuthorized(app,session,error);
+  Store.equipo=eq.nombre||session.user.email;
+  try{ const b=sessionStorage.getItem("sl_me"); if(b) S.pendingBadge=b; }catch(e){}
+  const pending=new Set(["gafetes","bom","plan","config","surtidos"]);
+  const first=c=>m=>{ S[c]=m; pending.delete(c); if(!pending.size) S.ready=true; if(S.ready) render(); };
+  ["gafetes","bom","plan","config"].forEach(c=>Store.watch(c,first(c)));
+  watchSurtidos(first("surtidos"));
+  setInterval(()=>{ if(["surtido","metricas","lineas"].includes(S.view)) render(true); },30000);
+})();
+// Los surtidos se leen solo para la fecha seleccionada.
+let surtUnsub=null, surtFecha=null;
+function watchSurtidos(cb){
+  if(surtUnsub) surtUnsub();
+  surtFecha=S.sel.fecha; S.surtidos={};
+  surtUnsub=Store.watch("surtidos",cb||(m=>{S.surtidos=m; render(true);}),{field:"fecha",value:surtFecha});
+}
+
+/* ===================== Sesión del equipo (Supabase Auth) ===================== */
+function renderDeviceLogin(app){
+  app.innerHTML=`<div class="login"><div class="card panel">
+    <div class="lbl">Paso 1 · Equipo</div><h2>Inicia sesión del equipo</h2>
+    <p class="muted">Se hace una sola vez por tablet o PC con la cuenta de equipo que dio de alta el administrador. Después el personal solo escanea su gafete.</p>
+    <form id="f-dev" class="stack">
+      <div class="fld"><label for="d-email">Correo de la cuenta de equipo</label><input id="d-email" type="email" autocomplete="username" required></div>
+      <div class="fld"><label for="d-pass">Contraseña</label><input id="d-pass" type="password" autocomplete="current-password" required></div>
+      <button class="btn pri">Iniciar sesión</button>
+      <div class="err" id="d-err"></div>
+    </form></div></div>`;
+  document.getElementById("f-dev").onsubmit=async e=>{e.preventDefault();
+    const err=document.getElementById("d-err"); err.textContent="";
+    const {error}=await Store.sb.auth.signInWithPassword({email:ffv("d-email"),password:document.getElementById("d-pass").value});
+    if(error) err.textContent=error.message==="Invalid login credentials"?"Correo o contraseña incorrectos.":error.message;
+    else location.reload();
+  };
+}
+function renderNotAuthorized(app,session,error){
+  app.innerHTML=`<div class="login"><div class="card panel">
+    <div class="lbl">Equipo sin autorización</div><h2>Esta cuenta no puede usar el surtido</h2>
+    <p class="muted">${error?"No se pudo comprobar la autorización: "+esc(error.message):"La cuenta <b>"+esc(session.user.email)+"</b> inició sesión, pero no está dada de alta como equipo de surtido."}</p>
+    <p class="note">Pide al administrador que la autorice. Identificador de la cuenta: <span class="mono">${esc(session.user.id)}</span></p>
+    <button class="btn" id="dev-out">Cerrar sesión del equipo</button></div></div>`;
+  document.getElementById("dev-out").onclick=()=>Store.sb.auth.signOut();
+}
+
+function login(badge){
+  const u=userByBadge(badge); if(!u) return false;
+  if(!ROLES[u.rol]||!ROLES[u.rol].tabs.length){ S.loginMsg=`${u.nombre} está registrado solo para recibir material; no tiene acceso a la app.`; return false; }
+  S.me=u; try{ sessionStorage.setItem("sl_me",u.gafete); }catch(e){}
+  S.view=ROLES[u.rol]?.tabs[0]||"surtido"; render(); return true;
+}
+function logout(){ S.me=null; S.view=null; try{ sessionStorage.removeItem("sl_me"); }catch(e){} render(); }
+
+function render(soft){
+  if(!S.ready) return;
+  if(surtFecha!==S.sel.fecha) watchSurtidos();
+  if(S.me){ S.me=userByBadge(S.me.gafete); if(!S.me) return logout(); }
+  if(!S.me && S.pendingBadge){ const b=S.pendingBadge; S.pendingBadge=null; if(login(b)) return; }
+  const top=document.getElementById("top"), app=document.getElementById("app");
+  if(!S.me){ top.hidden=true; if(!soft) renderLogin(app); return; }
+  if(soft && document.querySelector(".scrim")) return;
+  const active=document.activeElement; if(soft && active && active.matches("input,select") && app.contains(active)) return;
+  top.hidden=false;
+  const tabs=ROLES[S.me.rol].tabs; if(!tabs.includes(S.view)) S.view=tabs[0];
+  document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""}>${TAB_LABEL[t]}</button>`).join("");
+  document.getElementById("who").innerHTML=`<span>${esc(S.me.nombre)}</span><span class="role">${esc(ROLES[S.me.rol].label)}</span><button id="logout">Salir</button>`;
+  document.getElementById("conn").textContent="● "+Store.equipo;
+  ({lineas:viewLineas,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,gafetes:viewGafetes})[S.view](app);
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-tab]"); if(t){ S.view=t.dataset.tab; render(); return; }
+  if(e.target.id==="logout") logout();
+});
+
+/* ===================== Login con gafete ===================== */
+function renderLogin(app){
+  const noUsers=!Object.keys(S.gafetes).length;
+  if(noUsers){
+    app.innerHTML=`<div class="login"><div class="card panel">
+      <div class="lbl">Primer uso</div><h2>Registra al administrador</h2>
+      <p class="muted">Aún no hay gafetes registrados. La primera persona registrada será administrador y podrá dar de alta al resto del personal con su gafete.</p>
+      <form id="f-first" class="stack">
+        <div class="fld"><label for="ff-g">Número de gafete</label><input id="ff-g" required autocomplete="off"></div>
+        <div class="fld"><label for="ff-n">Nombre</label><input id="ff-n" required></div>
+        <button class="btn pri">Crear administrador</button>
+      </form></div></div>`;
+    document.getElementById("f-first").onsubmit=async e=>{e.preventDefault();
+      const g=ffv("ff-g"), n=ffv("ff-n"); if(!g||!n) return;
+      try{ await Store.set("gafetes",safeId(g),{gafete:g,nombre:n,rol:"admin"}); S.pendingBadge=g; }catch(err){ toast("No se pudo guardar: "+(err.code||err.message)); }
+    };
+    return;
+  }
+  app.innerHTML=`<div class="login"><div class="card panel">
+    <div class="lbl">Acceso a planta</div><h2>Escanea tu gafete</h2>
+    <input id="badge" class="badge-in" autocomplete="off" inputmode="numeric" placeholder="••••••" aria-label="Número de gafete">
+    <div class="err" id="badge-err"></div>
+    <p class="hint">El lector de gafetes escribe el número y envía Enter. También puedes teclearlo.</p>
+    <p class="hint">Equipo: <b>${esc(Store.equipo)}</b> · <button class="btn ghost" id="dev-out" style="padding:2px 8px">Cerrar sesión del equipo</button></p>
+  </div></div>`;
+  const inp=document.getElementById("badge"); inp.focus();
+  document.getElementById("dev-out").onclick=()=>Store.sb.auth.signOut();
+  inp.onkeydown=e=>{ if(e.key==="Enter"){ S.loginMsg=""; if(!login(inp.value)){ document.getElementById("badge-err").textContent=S.loginMsg||"Gafete "+inp.value+" no registrado. Pide al administrador que lo registre en Gafetes."; inp.select(); } } };
+}
+const ffv=id=>document.getElementById(id).value.trim();
+
+/* ===================== Plan de producción ===================== */
+function viewPlan(app){
+  const ed=can.editPlan(), c=cfg();
+  const rows=Object.values(S.plan).sort((a,b)=>(b.fecha+a.turno+a.linea).localeCompare(a.fecha+b.turno+b.linea));
+  const ens=Object.values(S.bom).map(b=>b.ensamble).sort();
+  app.innerHTML=`
+  <div class="view-head"><div><h2>Plan de producción</h2><p>Qué ensamble corre, cuántas piezas, en qué turno y en qué línea. El surtido se calcula a partir de este plan y del BOM.</p></div>
+  ${ed?`<div class="row"><button class="btn" id="tpl-plan">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-plan" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
+  ${ed?`<div class="panel" style="margin-bottom:16px"><div class="pb">
+    <form id="f-plan" class="row">
+      <div class="fld"><label for="p-fecha">Fecha</label><input type="date" id="p-fecha" value="${S.sel.fecha}" required></div>
+      <div class="fld"><label for="p-ens">Ensamble</label><input id="p-ens" class="w-m" list="dl-ens" required><datalist id="dl-ens">${ens.map(e=>`<option value="${esc(e)}">`).join("")}</datalist></div>
+      <div class="fld"><label for="p-cant">Cantidad</label><input id="p-cant" type="number" min="1" class="w-s" required></div>
+      <div class="fld"><label for="p-turno">Turno</label><select id="p-turno">${Object.keys(c.turnos).map(t=>`<option>${t}</option>`).join("")}</select></div>
+      <div class="fld"><label for="p-linea">Línea</label><input id="p-linea" class="w-s" required></div>
+      <div class="fld"><label for="p-uph">UPH <span class="muted">(opcional)</span></label><input id="p-uph" type="number" min="1" class="w-xs" placeholder="BOM"></div>
+      <button class="btn pri">Agregar al plan</button>
+    </form></div></div>`:""}
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th>${ed?"<th></th>":""}</tr></thead>
+    <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr>
+      <td class="mono">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}</td>
+      <td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):"—"}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
+      <td>${hasB?'<span class="pill p-ok">Cargado</span>':'<span class="pill p-bad">Falta BOM</span>'}</td>
+      ${ed?`<td><button class="btn danger" data-del-plan="${p._id}">Quitar</button></td>`:""}</tr>`}).join(""):`<tr><td colspan="9" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
+  </table></div></div>`;
+  if(!ed) return;
+  document.getElementById("f-plan").onsubmit=async e=>{e.preventDefault();
+    const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,creado:Date.now(),por:S.me.gafete};
+    S.sel.fecha=p.fecha; await safeWrite(()=>Store.set("plan",newId(),p)); toast("Agregado: "+p.ensamble+" en "+p.linea);
+  };
+  app.querySelectorAll("[data-del-plan]").forEach(b=>b.onclick=()=>confirmBox("¿Quitar esta fila del plan?","Quitar",()=>safeWrite(()=>Store.del("plan",b.dataset.delPlan))));
+  document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","Cantidad","Turno","Linea","UPH"],[today(),"ENS-1001",480,"T1","L1",60]]);
+  document.getElementById("xl-plan").onchange=e=>readXlsx(e.target.files[0],async rows=>{
+    let n=0, bad=0;
+    for(const r of rows){
+      const g=k=>pick(r,k);
+      const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,creado:Date.now(),por:S.me.gafete};
+      if(/^\d$/.test(p.turno)) p.turno="T"+p.turno;
+      if(!p.fecha||!p.ensamble||!(p.cantidad>0)||!p.turno||!p.linea){bad++;continue;}
+      await Store.set("plan",newId(),p); n++;
+    }
+    toast(`Plan: ${n} filas cargadas${bad?`, ${bad} ignoradas por datos incompletos`:""}.`);
+  });
+}
+
+/* ===================== BOM ===================== */
+function viewBom(app){
+  const ed=can.editPlan();
+  const list=Object.values(S.bom).sort((a,b)=>a.ensamble.localeCompare(b.ensamble));
+  if(!S.sel.bom||!S.bom[S.sel.bom]) S.sel.bom=list[0]?._id||null;
+  const cur=S.sel.bom?S.bom[S.sel.bom]:null;
+  app.innerHTML=`
+  <div class="view-head"><div><h2>BOM · materiales por ensamble</h2><p>Cada NP con su estación, cantidad por unidad y cantidad de empaque (lo que cabe en la estación). El UPH del ensamble se usa si el plan no trae uno.</p></div>
+  ${ed?`<div class="row"><button class="btn" id="tpl-bom">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-bom" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
+  <div class="grid2">
+    <div class="panel"><div class="ph"><h3>Ensambles</h3><span class="muted small">${list.length}</span></div>
+      ${ed?`<div class="pb" style="border-bottom:1px solid var(--line)"><form id="f-ens" class="row">
+        <div class="fld" style="flex:1"><label for="e-id">Ensamble</label><input id="e-id" required></div>
+        <div class="fld"><label for="e-uph">UPH</label><input id="e-uph" type="number" min="1" class="w-xs" required></div>
+        <button class="btn pri">Crear</button></form></div>`:""}
+      <div class="tbl-wrap"><table><tbody>${list.length?list.map(b=>`<tr style="cursor:pointer;${b._id===S.sel.bom?"background:var(--accent-soft)":""}" data-sel-bom="${b._id}">
+        <td class="mono"><b>${esc(b.ensamble)}</b><div class="small muted">${esc(b.desc||"")}</div></td><td class="num small">${(b.items||[]).length} NP</td><td class="num small">${b.uph?fmtN(b.uph)+" UPH":"sin UPH"}</td></tr>`).join(""):`<tr><td class="empty">Sin ensambles. ${ed?"Crea uno o carga el Excel del BOM.":""}</td></tr>`}</tbody></table></div>
+    </div>
+    <div class="panel">${cur?`
+      <div class="ph"><div><h3 class="mono">${esc(cur.ensamble)}</h3></div>
+        ${ed?`<div class="row"><div class="fld"><label for="cur-uph">UPH</label><input id="cur-uph" type="number" min="1" class="w-xs" value="${cur.uph||""}"></div><button class="btn danger" id="del-ens">Eliminar ensamble</button></div>`:`<span class="muted">${cur.uph||"—"} UPH</span>`}</div>
+      ${ed?`<div class="pb" style="border-bottom:1px solid var(--line)"><form id="f-item" class="row">
+        <div class="fld"><label for="i-np">NP</label><input id="i-np" class="w-m" required></div>
+        <div class="fld"><label for="i-desc">Descripción</label><input id="i-desc" class="w-m"></div>
+        <div class="fld"><label for="i-est">Estación</label><input id="i-est" class="w-xs" required></div>
+        <div class="fld"><label for="i-q">Cant./unidad</label><input id="i-q" type="number" step="any" min="0.0001" class="w-xs" value="1" required></div>
+        <div class="fld"><label for="i-emp">Empaque</label><input id="i-emp" type="number" min="1" class="w-xs" required></div>
+        <button class="btn pri">Agregar NP</button></form></div>`:""}
+      <div class="tbl-wrap"><table><thead><tr><th>Estación</th><th>NP</th><th>Descripción</th><th class="num">Cant./unidad</th><th class="num">Empaque</th>${ed?"<th></th>":""}</tr></thead>
+      <tbody>${(cur.items||[]).length?[...cur.items].map((it,i)=>({it,i})).sort((a,b)=>String(a.it.estacion).localeCompare(String(b.it.estacion),undefined,{numeric:true})).map(({it,i})=>`<tr>
+        <td><b>${esc(it.estacion)}</b></td><td class="mono">${esc(it.np)}</td><td>${esc(it.desc||"")}</td><td class="num">${fmtN(it.qtyPer,4)}</td><td class="num">${it.empaque?fmtN(it.empaque):"—"}</td>
+        ${ed?`<td><button class="btn danger" data-del-item="${i}">Quitar</button></td>`:""}</tr>`).join(""):`<tr><td colspan="6" class="empty">Este ensamble no tiene NP. Agrégalos arriba.</td></tr>`}</tbody></table></div>
+    `:`<div class="empty">Selecciona o crea un ensamble.</div>`}</div>
+  </div>`;
+  app.querySelectorAll("[data-sel-bom]").forEach(r=>r.onclick=()=>{S.sel.bom=r.dataset.selBom;render();});
+  if(!ed) return;
+  document.getElementById("tpl-bom").onclick=()=>downloadXlsx("plantilla_bom.xlsx",[["Ensamble","UPH","NP","Descripcion","Estacion","CantidadPorUnidad","Empaque"],["ENS-1001",60,"NP-55021","Tornillo M4x10","E10",4,1000],["ENS-1001",60,"NP-30877","Arnés principal","E20",1,40]]);
+  document.getElementById("f-ens").onsubmit=async e=>{e.preventDefault(); const id=ffv("e-id"); const k=safeId(id);
+    if(S.bom[k]) {S.sel.bom=k; render(); return toast("El ensamble ya existe.");}
+    await safeWrite(()=>Store.set("bom",k,{ensamble:id,uph:Number(ffv("e-uph")),items:[]})); S.sel.bom=k; };
+  if(!cur) { bindBomImport(); return; }
+  const saveCur=items=>safeWrite(()=>Store.set("bom",cur._id,Object.assign({},cur,items?{items}:{})));
+  document.getElementById("cur-uph").onchange=e=>{cur.uph=Number(e.target.value)||null; saveCur(); toast("UPH actualizado");};
+  document.getElementById("del-ens").onclick=()=>confirmBox(`¿Eliminar el ensamble ${cur.ensamble} y su BOM?`,"Eliminar",()=>safeWrite(()=>Store.del("bom",cur._id)));
+  document.getElementById("f-item").onsubmit=e=>{e.preventDefault();
+    saveCur([...(cur.items||[]),{np:ffv("i-np"),desc:ffv("i-desc"),estacion:ffv("i-est"),qtyPer:Number(ffv("i-q")),empaque:Number(ffv("i-emp"))}]); };
+  app.querySelectorAll("[data-del-item]").forEach(b=>b.onclick=()=>{const it=[...cur.items]; it.splice(Number(b.dataset.delItem),1); saveCur(it);});
+  bindBomImport();
+}
+function bindBomImport(){
+  document.getElementById("xl-bom").onchange=e=>readXlsx(e.target.files[0],async rows=>{
+    const groups={}; let bad=0;
+    rows.forEach(r=>{const g=k=>pick(r,k);
+      const ens=String(g(["ensamble","assembly","modelo"])||"").trim(), np=String(g(["np","numero de parte","part number","pn"])||"").trim();
+      const est=String(g(["estacion","estación","station"])||"").trim();
+      if(!ens||!np||!est){bad++;return;}
+      const grp=groups[ens]=groups[ens]||{ensamble:ens,uph:null,items:[]};
+      const u=Number(g(["uph"])); if(u) grp.uph=u;
+      grp.items.push({np,desc:String(g(["descripcion","descripción","desc","descripcionnp"])||""),estacion:est,qtyPer:Number(g(["cantidadporunidad","cant/unidad","qtyper","cantidad","qty"]))||1,empaque:Number(g(["empaque","cantidadempaque","pack","capacidad"]))||null});
+    });
+    let n=0; for(const ens of Object.keys(groups)){ const k=safeId(ens), prev=S.bom[k]; const gr=groups[ens]; if(!gr.uph&&prev) gr.uph=prev.uph||null; await Store.set("bom",k,gr); n++; }
+    toast(`BOM: ${n} ensambles cargados (reemplazan su lista de NP)${bad?`, ${bad} filas ignoradas`:""}.`);
+  });
+}
+
+/* ===================== Líneas: tablero de estado =====================
+   Una línea está al 100 % cuando todos los surtidos cuya hora ya llegó están confirmados. */
+function lineBoard(fecha,turno,now){
+  const L={};
+  Object.values(S.plan).filter(p=>p.fecha===fecha&&(!turno||p.turno===turno)).forEach(p=>{
+    const ln=L[p.linea]=L[p.linea]||{linea:p.linea,ens:new Set(),turnos:new Set(),ok:0,due:0,soon:0,total:0,done:0,pend:[],st:{},err:[]};
+    ln.ens.add(p.ensamble); ln.turnos.add(p.turno);
+    const r=computeItems(p); if(r.error) ln.err.push(r.error);
+    r.items.forEach(it=>{
+      const st=ln.st[it.estacion]=ln.st[it.estacion]||{due:0,soon:0};
+      it.trips.forEach(t=>{ const s=tripStatus(t,now); ln.total++; if(s.done) ln.done++;
+        if(t.at.getTime()<=now){ if(s.done) ln.ok++; else {ln.due++; st.due++; ln.pend.push({p,it,t,min:(now-t.at.getTime())/60000});} }
+        else if(s.key==="soon"){ ln.soon++; st.soon++; }
+      });
+    });
+  });
+  return Object.values(L).map(l=>{
+    l.pct=l.ok+l.due?Math.floor(l.ok/(l.ok+l.due)*100):100;
+    l.state=l.err.length&&!l.total?"err":l.due?"due":l.soon?"soon":"ok";
+    l.pend.sort((a,b)=>b.min-a.min); return l;
+  }).sort((a,b)=>(b.due-a.due)||a.linea.localeCompare(b.linea,undefined,{numeric:true}));
+}
+function viewLineas(app){
+  const c=cfg(), now=Date.now(), lines=lineBoard(S.sel.fecha,S.sel.turno,now);
+  const al100=lines.filter(l=>l.state==="ok"||l.state==="soon").length, falt=lines.filter(l=>l.state==="due").length;
+  const pendNP=lines.reduce((n,l)=>n+l.due,0);
+  const pill={ok:'<span class="pill p-ok">Al 100%</span>',soon:'<span class="pill p-warn">Al 100% · surtido próximo</span>',due:'<span class="pill p-bad">Falta resurtir</span>',err:'<span class="pill p-idle">Sin BOM o UPH</span>'};
+  const ago=m=>m<60?Math.max(1,Math.round(m))+" min":Math.floor(m/60)+" h "+String(Math.round(m%60)).padStart(2,"0")+" min";
+  app.innerHTML=`
+  <div class="view-head"><div><h2>Estado de líneas</h2><p>Una línea está al 100% cuando todos los surtidos que ya tocaban están confirmados. Las que tienen surtidos vencidos aparecen primero.</p></div></div>
+  <div class="filters">
+    <div class="fld"><label for="l-fecha">Fecha</label><input type="date" id="l-fecha" value="${S.sel.fecha}"></div>
+    <div class="fld"><label for="l-turno">Turno</label><select id="l-turno"><option value="">Todos</option>${Object.keys(c.turnos).map(t=>`<option ${S.sel.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
+    <span class="muted small" style="margin-left:auto">Actualizado ${fmtT(new Date())} · se refresca cada 30 s</span>
+  </div>
+  <div class="summary">
+    <div><div class="lbl">Líneas con plan</div><div class="v">${lines.length}</div></div>
+    <div><div class="lbl">Al 100%</div><div class="v ok">${al100}</div></div>
+    <div><div class="lbl">Falta resurtir</div><div class="v ${falt?"bad":""}">${falt}</div></div>
+    <div><div class="lbl">Surtidos vencidos</div><div class="v ${pendNP?"bad":""}">${pendNP}</div></div>
+  </div>
+  ${lines.length?`<div class="lines">${lines.map(l=>`
+    <section class="panel line-card st-${l.state}">
+      <div class="lc-head"><div><div class="lc-name">${esc(l.linea)}</div><div class="small muted">${[...l.ens].map(esc).join(", ")} · ${[...l.turnos].join(", ")}</div></div>
+        <div class="lc-pct num">${l.state==="err"?"—":l.pct+"%"}</div></div>
+      <div class="lc-body">
+        ${pill[l.state]}
+        <div class="meter"><i style="width:${l.pct}%;background:var(${l.state==="due"?"--bad":"--ok"})"></i></div>
+        <div class="small muted">${l.ok} de ${l.ok+l.due} surtidos al momento · ${l.done}/${l.total} del día${l.soon?` · ${l.soon} en los próximos 15 min`:""}</div>
+        <div class="st-chips" aria-label="Estaciones">${Object.entries(l.st).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).map(([e,s])=>`<span class="st-chip ${s.due?"due":s.soon?"soon":"ok"}" title="Estación ${esc(e)}: ${s.due?s.due+" vencido(s)":s.soon?"surtido próximo":"al 100%"}">${esc(e)}</span>`).join("")}</div>
+        ${l.pend.length?`<div class="pend"><div class="lbl">Pendiente de resurtir</div>${l.pend.slice(0,6).map(x=>`<div class="pend-row"><span class="mono"><b>${esc(x.it.estacion)}</b> · ${esc(x.it.np)}</span><span class="mono">${fmtN(x.t.qty)} pzs</span><span class="late-by">hace ${ago(x.min)}</span></div>`).join("")}${l.pend.length>6?`<div class="small muted">y ${l.pend.length-6} más</div>`:""}</div>`:""}
+        ${l.err.length?`<div class="small" style="color:var(--bad)">${[...new Set(l.err)].map(esc).join(" · ")}</div>`:""}
+        <div><button class="btn ${l.state==="due"?"pri":""}" data-go-line="${esc(l.linea)}">Ver surtido de ${esc(l.linea)}</button></div>
+      </div>
+    </section>`).join("")}</div>`
+  :`<div class="panel empty">No hay plan para ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}. ${can.editPlan()?"Cárgalo en la pestaña Plan de producción.":"Pide al planeador que cargue el plan."}</div>`}`;
+  document.getElementById("l-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
+  document.getElementById("l-turno").onchange=e=>{S.sel.turno=e.target.value;render();};
+  app.querySelectorAll("[data-go-line]").forEach(b=>b.onclick=()=>{S.sel.linea=b.dataset.goLine; S.view="surtido"; render();});
+}
+
+/* ===================== Surtido ===================== */
+function viewSurtido(app){
+  const c=cfg(), now=Date.now();
+  const plans=Object.values(S.plan).filter(p=>p.fecha===S.sel.fecha);
+  const lineas=[...new Set(plans.map(p=>p.linea))].sort();
+  if(S.sel.linea && !lineas.includes(S.sel.linea)) S.sel.linea="";
+  const shown=plans.filter(p=>(!S.sel.turno||p.turno===S.sel.turno)&&(!S.sel.linea||p.linea===S.sel.linea));
+  // agrupa por línea+estación
+  const stations={}; const errors=[]; let tot=0,done=0,due=0,next=null;
+  shown.forEach(p=>{ const r=computeItems(p); if(r.error) errors.push(r.error);
+    r.items.forEach(it=>{ const key=p.linea+"|"+it.estacion;
+      const st=stations[key]=stations[key]||{linea:p.linea,estacion:it.estacion,rows:[]};
+      const statuses=it.trips.map(t=>({t,s:tripStatus(t,now)}));
+      tot+=statuses.length; done+=statuses.filter(x=>x.s.done).length; due+=statuses.filter(x=>x.s.key==="due").length;
+      const nxt=statuses.find(x=>!x.s.done); if(nxt&&(!next||nxt.t.at<next)) next=nxt.t.at;
+      st.rows.push({p,it,statuses,nxt});
+    });
+  });
+  const stList=Object.values(stations).sort((a,b)=>(a.linea+a.estacion).localeCompare(b.linea+b.estacion,undefined,{numeric:true}));
+  stList.forEach(s=>s.rows.sort((a,b)=>(a.nxt?a.nxt.t.at:Infinity)-(b.nxt?b.nxt.t.at:Infinity)));
+  app.innerHTML=`
+  <div class="view-head"><div><h2>Surtido de línea</h2><p>NP a surtir por estación según el plan. Punto de reorden al ${c.pct}% de la capacidad de la estación; cada surtido repone el ${100-c.pct}%. ${can.confirm()?"Confirma cada surtido con tu gafete y el de quien recibe.":""}</p></div></div>
+  <div class="filters">
+    <div class="fld"><label for="s-fecha">Fecha</label><input type="date" id="s-fecha" value="${S.sel.fecha}"></div>
+    <div class="fld"><label for="s-turno">Turno</label><select id="s-turno"><option value="">Todos</option>${Object.keys(c.turnos).map(t=>`<option ${S.sel.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
+    <div class="fld"><label for="s-linea">Línea</label><select id="s-linea"><option value="">Todas</option>${lineas.map(l=>`<option ${S.sel.linea===l?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
+    <span class="muted small" style="margin-left:auto">Actualizado ${fmtT(new Date())}</span>
+  </div>
+  <div class="summary">
+    <div><div class="lbl">Surtidos programados</div><div class="v">${tot}</div></div>
+    <div><div class="lbl">Confirmados</div><div class="v ok">${done}</div></div>
+    <div><div class="lbl">Vencidos</div><div class="v ${due?"bad":""}">${due}</div></div>
+    <div><div class="lbl">Siguiente surtido</div><div class="v">${next?fmtT(next):"—"}</div></div>
+  </div>
+  ${errors.length?`<div class="note" style="margin-bottom:16px;border-color:var(--bad);color:var(--bad)">${[...new Set(errors)].map(esc).join(" · ")}. Corrígelo en BOM o Plan.</div>`:""}
+  ${stList.length?`<div class="stations">${stList.map(st=>`
+    <section class="panel station"><div class="ph"><h3><span class="st-id">${esc(st.linea)}</span> Estación ${esc(st.estacion)}</h3><span class="muted small">${st.rows.length} NP</span></div>
+    ${st.rows.map(r=>npRow(r,now)).join("")}</section>`).join("")}</div>`
+  :`<div class="panel empty">No hay plan para ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}. ${can.editPlan()?"Cárgalo en la pestaña Plan de producción.":"Pide al planeador que cargue el plan."}</div>`}`;
+  document.getElementById("s-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
+  document.getElementById("s-turno").onchange=e=>{S.sel.turno=e.target.value;render();};
+  document.getElementById("s-linea").onchange=e=>{S.sel.linea=e.target.value;render();};
+  app.querySelectorAll("[data-confirm]").forEach(b=>b.onclick=()=>{
+    const [pid,idx,est,np]=JSON.parse(b.dataset.confirm); const p=S.plan[pid];
+    const it=computeItems(p).items.find(x=>x.estacion===est&&x.np===np); openConfirm(p,it,it.trips[idx]);
+  });
+}
+function npRow({p,it,statuses,nxt},now){
+  const cls={done:"done",late:"late",due:"due",soon:"",sched:""};
+  const pillOf=k=>({due:'<span class="pill p-bad">Vencido</span>',soon:'<span class="pill p-warn">Próximo</span>',sched:'<span class="pill p-idle">Programado</span>'}[k]);
+  const allDone=!nxt;
+  return `<div class="np-row">
+    <div style="min-width:0"><div class="np">${esc(it.np)} <span class="muted" style="font-family:var(--f-body);font-weight:400;font-size:13px">${esc(it.desc||"")}</span></div>
+      <div class="plan-line">${esc(p.ensamble)} · ${esc(p.turno)} · ${fmtN(p.cantidad)} pzs</div>
+      <div class="np-meta"><span>Cada <b>${fmtInterval(it.intervalMin)}</b></span><span>Surtir <b>${fmtN(it.repl)}</b></span><span>Reorden en <b>${fmtN(it.rop)}</b> / ${fmtN(it.cap)}</span><span>Consumo <b>${fmtN(it.rate,1)}</b>/h</span></div></div>
+    <div class="np-act">${allDone?'<span class="pill p-ok">Completo</span>':`${pillOf(nxt.s.key)}<span class="mono small">${fmtT(nxt.t.at)} · ${fmtN(nxt.t.qty)} pzs</span>
+      ${can.confirm()?`<button class="btn ${nxt.s.key==="due"?"ok":"pri"}" data-confirm='${esc(JSON.stringify([p._id,nxt.t.k,it.estacion,it.np]))}'>Confirmar surtido</button>`:""}`}</div>
+    <div class="trips" aria-label="Surtidos del turno">${statuses.map(x=>`<span class="trip ${cls[x.s.key]} ${nxt&&x===nxt?"next":""}" title="${x.s.done?"Surtió "+esc(x.s.done.surtioNombre)+" · recibió "+esc(x.s.done.recibioNombre)+" · "+fmtT(new Date(x.s.done.ts)):"Programado "+fmtT(x.t.at)}">${fmtT(x.t.at)}</span>`).join("")}</div>
+  </div>`;
+}
+const fmtInterval=m=>m>=60?(Math.floor(m/60)+" h "+String(Math.round(m%60)).padStart(2,"0")+" min"):Math.max(1,Math.round(m))+" min";
+
+function openConfirm(p,it,trip){
+  const root=document.getElementById("modal-root");
+  // Quien surte es el materialista con sesión; quien recibe solo escanea su gafete y con eso queda registrado.
+  const s=S.me;
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="mc-t">
+    <div class="ph"><h3 id="mc-t">Confirmar surtido</h3><button class="btn ghost" id="mc-x">Cancelar</button></div>
+    <div class="pb">
+      <div class="note"><b class="mono">${esc(it.np)}</b> · ${fmtN(trip.qty)} pzs → Línea <b>${esc(p.linea)}</b>, estación <b>${esc(it.estacion)}</b><br>Programado ${fmtT(trip.at)} · surtido ${trip.k+1} de ${it.trips.length} · Surte <b>${esc(s.nombre)}</b></div>
+      <div class="fld"><label for="mc-r">Quien recibe: escanea su gafete</label><input id="mc-r" class="badge-in" style="margin-top:0" autocomplete="off" inputmode="numeric" placeholder="••••••"></div>
+      <div class="err" id="mc-err"></div>
+    </div></div></div>`;
+  const close=()=>root.innerHTML="";
+  document.getElementById("mc-x").onclick=close;
+  const inp=document.getElementById("mc-r"), err=document.getElementById("mc-err");
+  inp.focus();
+  inp.onkeydown=async e=>{
+    if(e.key!=="Enter") return; e.preventDefault(); err.textContent="";
+    const r=userByBadge(inp.value);
+    const fail=m=>{ err.textContent=m; inp.select(); };
+    if(!r) return fail(`El gafete ${inp.value} no está registrado. Regístralo en la sección Gafetes.`);
+    if(r.gafete===s.gafete) return fail("Quien recibe debe ser una persona distinta a quien surte.");
+    const rec={planId:p._id,fecha:p.fecha,turno:p.turno,linea:p.linea,ensamble:p.ensamble,estacion:it.estacion,np:it.np,k:trip.k,
+      programado:trip.at.getTime(),cantidad:trip.qty,ts:Date.now(),surtio:s.gafete,surtioNombre:s.nombre,recibio:r.gafete,recibioNombre:r.nombre};
+    inp.disabled=true;
+    const ok=await safeWrite(()=>Store.insert("surtidos",trip.id,rec));
+    if(ok){ close(); toast(`Surtido registrado: ${it.np} en ${p.linea}/${it.estacion}. Recibió ${r.nombre}.`); }
+    else { inp.disabled=false; inp.select(); }
+  };
+}
+
+/* ===================== Métricas ===================== */
+function viewMetricas(app){
+  const c=cfg(), now=Date.now();
+  const plans=Object.values(S.plan).filter(p=>p.fecha===S.sel.fecha&&(!S.sel.turno||p.turno===S.sel.turno));
+  const byLine={}; let tot=0,done=0,onTime=0,due=0,delays=[];
+  plans.forEach(p=>computeItems(p).items.forEach(it=>it.trips.forEach(t=>{
+    const s=tripStatus(t,now); const L=byLine[p.linea]=byLine[p.linea]||{tot:0,ok:0,late:0,due:0};
+    tot++; L.tot++;
+    if(s.done){done++; if(s.key==="done"){onTime++;L.ok++;}else L.late++; delays.push((s.done.ts-t.at.getTime())/60000);}
+    else if(s.key==="due"){due++;L.due++;}
+  })));
+  const recs=Object.values(S.surtidos).filter(r=>r.fecha===S.sel.fecha&&(!S.sel.turno||r.turno===S.sel.turno)).sort((a,b)=>b.ts-a.ts);
+  const byMat={}; recs.forEach(r=>{const m=byMat[r.surtio]=byMat[r.surtio]||{nombre:r.surtioNombre,n:0,pzs:0,late:0}; m.n++; m.pzs+=Number(r.cantidad)||0; if(r.ts-r.programado>c.tolerancia*60000) m.late++;});
+  const vencidosAhora=due;
+  const pct=(a,b)=>b?Math.round(a/b*100):0;
+  const avgDelay=delays.length?delays.reduce((a,b)=>a+b,0)/delays.length:0;
+  const elapsed=plans.reduce((n,p)=>n+computeItems(p).items.reduce((m,it)=>m+it.trips.filter(t=>t.at.getTime()<=now).length,0),0);
+  const lines=Object.keys(byLine).sort();
+  app.innerHTML=`
+  <div class="view-head"><div><h2>Métricas de surtido</h2><p>Cumplimiento contra el programa calculado del plan. "A tiempo" = confirmado dentro de ${c.tolerancia} min de la hora programada.</p></div></div>
+  <div class="filters">
+    <div class="fld"><label for="m-fecha">Fecha</label><input type="date" id="m-fecha" value="${S.sel.fecha}"></div>
+    <div class="fld"><label for="m-turno">Turno</label><select id="m-turno"><option value="">Todos</option>${Object.keys(c.turnos).map(t=>`<option ${S.sel.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
+  </div>
+  <div class="kpis">
+    <div class="panel kpi"><div class="lbl">Cumplimiento a la fecha</div><div class="v">${pct(done,elapsed)}%</div><div class="s">${done} de ${elapsed} surtidos que ya tocaban</div><div class="meter"><i style="width:${pct(done,elapsed)}%"></i></div></div>
+    <div class="panel kpi"><div class="lbl">A tiempo</div><div class="v">${pct(onTime,done)}%</div><div class="s">${onTime} de ${done} confirmados</div><div class="meter"><i style="width:${pct(onTime,done)}%;background:var(--ok)"></i></div></div>
+    <div class="panel kpi"><div class="lbl">Vencidos ahora</div><div class="v ${vencidosAhora?"bad":""}" style="${vencidosAhora?"color:var(--bad)":""}">${vencidosAhora}</div><div class="s">Sin confirmar después de su hora</div></div>
+    <div class="panel kpi"><div class="lbl">Retraso promedio</div><div class="v">${delays.length?fmtN(avgDelay,1):"—"}<span style="font-size:18px"> min</span></div><div class="s">${tot} surtidos programados en el día</div></div>
+  </div>
+  <div class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+    <div class="panel"><div class="ph"><h3>Por línea</h3><span class="small muted"><span class="pill p-ok">A tiempo</span> <span class="pill p-warn">Tarde</span></span></div><div class="pb">
+      ${lines.length?`<div class="bars">${lines.map(l=>{const L=byLine[l];return`<div class="bar-row"><b>${esc(l)}</b>
+        <div class="bar-track" title="${L.ok} a tiempo, ${L.late} tarde, ${L.due} vencidos de ${L.tot}"><s style="width:${pct(L.ok+L.late,L.tot)}%"></s><i style="width:${pct(L.ok,L.tot)}%"></i></div>
+        <span class="mono small">${L.ok+L.late}/${L.tot}${L.due?` · <span style="color:var(--bad)">${L.due} venc.</span>`:""}</span></div>`}).join("")}</div>`:`<div class="empty">Sin plan para esta fecha.</div>`}
+    </div></div>
+    <div class="panel"><div class="ph"><h3>Por materialista</h3></div><div class="tbl-wrap"><table>
+      <thead><tr><th>Materialista</th><th class="num">Surtidos</th><th class="num">Piezas</th><th class="num">Tarde</th></tr></thead>
+      <tbody>${Object.keys(byMat).length?Object.entries(byMat).sort((a,b)=>b[1].n-a[1].n).map(([g,m])=>`<tr><td>${esc(m.nombre)} <span class="muted mono small">${esc(g)}</span></td><td class="num">${m.n}</td><td class="num">${fmtN(m.pzs)}</td><td class="num">${m.late}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">Sin surtidos confirmados.</td></tr>`}</tbody></table></div></div>
+  </div>
+  <div class="panel" style="margin-top:16px"><div class="ph"><h3>Bitácora de surtidos</h3><span class="muted small">${recs.length} registros</span></div><div class="tbl-wrap"><table>
+    <thead><tr><th>Hora</th><th>Prog.</th><th>Línea</th><th>Estación</th><th>NP</th><th class="num">Cant.</th><th>Surtió</th><th>Recibió</th><th>Estado</th></tr></thead>
+    <tbody>${recs.length?recs.slice(0,200).map(r=>{const late=r.ts-r.programado>c.tolerancia*60000;return`<tr><td class="mono">${fmtT(new Date(r.ts))}</td><td class="mono muted">${fmtT(new Date(r.programado))}</td><td>${esc(r.linea)}</td><td>${esc(r.estacion)}</td><td class="mono">${esc(r.np)}</td><td class="num">${fmtN(r.cantidad)}</td><td>${esc(r.surtioNombre)}</td><td>${esc(r.recibioNombre)}</td><td>${late?'<span class="pill p-warn">Tarde</span>':'<span class="pill p-ok">A tiempo</span>'}</td></tr>`}).join(""):`<tr><td colspan="9" class="empty">Aún no hay surtidos confirmados en esta fecha.</td></tr>`}</tbody></table></div></div>`;
+  document.getElementById("m-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
+  document.getElementById("m-turno").onchange=e=>{S.sel.turno=e.target.value;render();};
+}
+
+/* ===================== Gafetes y ajustes ===================== */
+function viewGafetes(app){
+  const c=cfg(); const q=(S.sel.qGaf||"").toLowerCase();
+  const all=Object.values(S.gafetes).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const us=all.filter(u=>!q||(u.gafete+" "+u.nombre+" "+(u.area||"")).toLowerCase().includes(q));
+  const roleOpts=sel=>Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${sel===k?"selected":""}>${v.label}</option>`).join("");
+  app.innerHTML=`
+  <div class="view-head"><div><h2>Gafetes</h2><p>Registro de cada gafete y la persona a la que pertenece. Quien recibe material en línea solo necesita estar registrado aquí; el rol define si además puede entrar a la app y qué ve.</p></div>
+  <div class="row"><button class="btn" id="tpl-gaf">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-gaf" accept=".xlsx,.xls,.csv"></label></div></div>
+  <div class="grid2">
+    <div class="stack">
+      <div class="panel"><div class="ph"><h3>Registrar gafete</h3></div><div class="pb"><form id="f-user" class="stack">
+        <div class="fld"><label for="u-g">Gafete</label><input id="u-g" required autocomplete="off" placeholder="Escanea o teclea"></div>
+        <div class="fld"><label for="u-n">Nombre</label><input id="u-n" required></div>
+        <div class="fld"><label for="u-a">Área o línea</label><input id="u-a" placeholder="Ej. L1, Almacén"></div>
+        <div class="fld"><label for="u-r">Rol</label><select id="u-r">${roleOpts("receptor")}</select></div>
+        <button class="btn pri">Registrar gafete</button></form></div></div>
+      <div class="panel"><div class="ph"><h3>Parámetros de surtido</h3></div><div class="pb"><form id="f-cfg" class="stack">
+        <div class="row"><div class="fld"><label for="c-pct">Punto de reorden %</label><input id="c-pct" type="number" min="20" max="90" value="${c.pct}" class="w-xs"></div>
+        <div class="fld"><label for="c-tol">Tolerancia min</label><input id="c-tol" type="number" min="0" value="${c.tolerancia}" class="w-xs"></div></div>
+        ${Object.entries(c.turnos).map(([t,v])=>`<div class="row"><div class="fld"><label>${t}</label><span class="mono">Turno</span></div>
+          <div class="fld"><label for="c-${t}-i">Inicio</label><input type="time" id="c-${t}-i" value="${v.inicio}"></div>
+          <div class="fld"><label for="c-${t}-f">Fin</label><input type="time" id="c-${t}-f" value="${v.fin}"></div></div>`).join("")}
+        <p class="small muted" style="margin:0">El punto de reorden nunca baja de 20%.</p>
+        <button class="btn pri">Guardar parámetros</button></form></div></div>
+    </div>
+    <div class="panel"><div class="ph"><h3>Gafetes registrados</h3>
+      <div class="row"><input id="g-q" placeholder="Buscar gafete, nombre o área" value="${esc(S.sel.qGaf||"")}" aria-label="Buscar gafete"><span class="muted small">${us.length} de ${all.length}</span></div></div>
+      <div class="tbl-wrap"><table>
+      <thead><tr><th>Gafete</th><th>Nombre</th><th>Área</th><th>Rol</th><th></th></tr></thead>
+      <tbody>${us.length?us.map(u=>`<tr><td class="mono">${esc(u.gafete)}</td><td>${esc(u.nombre)}</td><td>${esc(u.area||"")}</td>
+        <td><select data-rol="${u._id}" aria-label="Rol de ${esc(u.nombre)}" ${u.gafete===S.me.gafete?"disabled":""}>${roleOpts(u.rol)}</select></td>
+        <td>${u.gafete===S.me.gafete?'<span class="muted small">Tú</span>':`<button class="btn danger" data-del-user="${u._id}">Dar de baja</button>`}</td></tr>`).join(""):`<tr><td colspan="5" class="empty">Ningún gafete coincide con la búsqueda.</td></tr>`}</tbody></table></div></div>
+  </div>`;
+  const gq=document.getElementById("g-q");
+  gq.oninput=()=>{ S.sel.qGaf=gq.value; const pos=gq.selectionStart; render(); const n=document.getElementById("g-q"); n.focus(); n.setSelectionRange(pos,pos); };
+  document.getElementById("f-user").onsubmit=async e=>{e.preventDefault(); const g=ffv("u-g");
+    if(userByBadge(g)) return toast("Ese gafete ya está registrado.");
+    if(await safeWrite(()=>Store.set("gafetes",safeId(g),{gafete:g,nombre:ffv("u-n"),area:ffv("u-a"),rol:ffv("u-r")}))){ toast("Gafete registrado"); e.target.reset(); }};
+  document.getElementById("tpl-gaf").onclick=()=>downloadXlsx("plantilla_gafetes.xlsx",[["Gafete","Nombre","Area","Rol"],["100245","Nombre Apellido","L1","receptor"],["100246","Nombre Apellido","Almacén","materialista"]]);
+  document.getElementById("xl-gaf").onchange=e=>readXlsx(e.target.files[0],async rows=>{
+    const roleOf=v=>{ const n=norm(v||""); return Object.keys(ROLES).find(k=>norm(k)===n||norm(ROLES[k].label).startsWith(n))||"receptor"; };
+    let n=0,bad=0;
+    for(const r of rows){ const g=String(pick(r,["gafete","badge","numero","num"])??"").trim(), nom=String(pick(r,["nombre","name"])??"").trim();
+      if(!g||!nom){bad++;continue;}
+      const prev=userByBadge(g);
+      // Un archivo no cambia el rol de quien ya es administrador.
+      const rol=prev&&prev.rol==="admin"?"admin":roleOf(pick(r,["rol","role"]));
+      await Store.set("gafetes",safeId(g),{gafete:g,nombre:nom,area:String(pick(r,["area","área","linea","línea"])??"").trim(),rol}); n++; }
+    toast(`Gafetes: ${n} registrados o actualizados${bad?`, ${bad} filas sin gafete o nombre`:""}.`);
+  });
+  document.getElementById("f-cfg").onsubmit=async e=>{e.preventDefault();
+    const turnos={}; Object.keys(c.turnos).forEach(t=>turnos[t]={inicio:ffv(`c-${t}-i`),fin:ffv(`c-${t}-f`)});
+    const pct=Math.max(20,Number(ffv("c-pct"))||20);
+    if(await safeWrite(()=>Store.set("config","general",{pct,tolerancia:Number(ffv("c-tol"))||0,turnos}))) toast("Parámetros guardados");};
+  app.querySelectorAll("[data-rol]").forEach(s=>s.onchange=()=>{const u=S.gafetes[s.dataset.rol]; safeWrite(()=>Store.set("gafetes",u._id,Object.assign({},u,{rol:s.value})));});
+  app.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=()=>{const u=S.gafetes[b.dataset.delUser]; confirmBox(`¿Dar de baja a ${u.nombre}?`,"Dar de baja",()=>safeWrite(()=>Store.del("gafetes",u._id)));});
+}
+
+/* ===================== Utilidades ===================== */
+async function safeWrite(fn){
+  try{ await fn(); return true; }
+  catch(e){ const code=e&&e.code;
+    toast(code==="23505"?"Este surtido ya fue confirmado por otra persona.":
+      code==="42501"?"Este equipo no tiene permiso para guardar. Pide al administrador que lo autorice.":
+      /fetch|network/i.test(e.message||"")?"Sin conexión. Revisa el internet y vuelve a intentar.":
+      "No se pudo guardar ("+(e.message||code)+").");
+    return false; }
+}
+function confirmBox(msg,label,fn){
+  const root=document.getElementById("modal-root");
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true"><div class="pb"><p style="margin:0">${esc(msg)}</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="cb-n">Cancelar</button><button class="btn pri" id="cb-y">${esc(label)}</button></div></div></div></div>`;
+  document.getElementById("cb-n").onclick=()=>root.innerHTML="";
+  document.getElementById("cb-y").onclick=()=>{root.innerHTML=""; fn();};
+}
+const norm=s=>String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[\s_]/g,"");
+function pick(row,keys){ const nk=keys.map(norm); for(const k of Object.keys(row)){ if(nk.includes(norm(k))) return row[k]; } return undefined; }
+function xlDate(v){
+  if(v==null||v==="") return "";
+  if(v instanceof Date) return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
+  if(typeof v==="number"){ const d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10); }
+  const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if(m) return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+  m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/); if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return y+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0"); }
+  return "";
+}
+function readXlsx(file,cb){
+  if(!file) return; if(!window.XLSX) return toast("No se pudo cargar el lector de Excel. Revisa tu conexión.");
+  const fr=new FileReader();
+  fr.onload=async()=>{ try{ const wb=XLSX.read(new Uint8Array(fr.result),{type:"array",cellDates:true});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+      if(!rows.length) return toast("El archivo no tiene filas.");
+      await cb(rows);
+    }catch(e){ toast("No se pudo leer el archivo: "+e.message); } };
+  fr.readAsArrayBuffer(file);
+}
+async function downloadXlsx(name,aoa){
+  if(!window.XLSX) return toast("No se pudo cargar el generador de Excel.");
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),"Datos");
+  const data=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  let dl=null; try{ dl=window.claude&&await window.claude.use("downloads"); }catch(e){}
+  if(dl){ try{ await dl.save({filename:name,data:new Uint8Array(data)}); }catch(e){ if(e.code!=="declined") toast("No se pudo descargar ("+e.code+")."); } return; }
+  try{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data])); a.download=name; a.click(); }
+  catch(e){ toast("Columnas: "+aoa[0].join(", ")); }
+}
+</script>
+</body>
+</html>
