@@ -123,12 +123,25 @@ td.num,th.num{text-align:right}
 .trip.late{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .trip.due{background:var(--bad-soft);color:var(--bad);border-color:transparent;font-weight:600}
 .trip.next{outline:2px solid var(--accent);outline-offset:-1px;color:var(--ink)}
+.trip.stop{border-style:dashed;color:var(--ink-3)}
 .plan-line{font-size:12px;color:var(--ink-2);margin-top:2px}
+.recount-line{grid-column:1/-1;font-size:12px;color:var(--accent)}
+
+/* control de línea: paros y arranque de ensambles */
+.ctl-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:12px 16px;border-bottom:1px solid var(--line);align-items:center}
+.ctl-row:last-child{border-bottom:0}
+.ctl-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ctl-line .st-id{font-family:var(--f-mono);font-size:13px;background:var(--bar);color:var(--bar-ink);padding:2px 8px;border-radius:3px}
+.ctl-plans{grid-column:1/-1;display:grid;gap:6px}
+.ctl-plan{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;font-size:13px}
+.ctl-plan .grow{flex:1;min-width:0}
+.bulk{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--line);font-size:13px}
+.bulk label{display:flex;align-items:center;gap:6px;cursor:pointer}
 
 /* líneas */
 .lines{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:16px}
 .line-card{border-top:6px solid var(--idle);overflow:hidden}
-.line-card.st-ok{border-top-color:var(--ok)} .line-card.st-soon{border-top-color:var(--warn)} .line-card.st-due{border-top-color:var(--bad)}
+.line-card.st-ok{border-top-color:var(--ok)} .line-card.st-soon,.line-card.st-stop{border-top-color:var(--warn)} .line-card.st-due{border-top-color:var(--bad)}
 .lc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:12px 16px 0}
 .lc-name{font:700 34px/1 var(--f-display);text-transform:uppercase;letter-spacing:.02em}
 .lc-pct{font:600 34px/1 var(--f-display)}
@@ -229,14 +242,20 @@ const Store={
   async del(col,id){
     const {error}=await this.sb.from("sl_"+col).delete().eq("id",id);
     if(error) throw error;
+  },
+  async delMany(col,ids){
+    for(let i=0;i<ids.length;i+=200){
+      const {error}=await this.sb.from("sl_"+col).delete().in("id",ids.slice(i,i+200));
+      if(error) throw error;
+    }
   }
 };
 const safeId=s=>String(s).trim().replace(/[^A-Za-z0-9_\-.~:@+]/g,"-").slice(0,120)||"x";
 const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
 /* ===================== Estado ===================== */
-const S={gafetes:{},bom:{},plan:{},surtidos:{},config:{},
-  me:null, view:null, sel:{fecha:today(),turno:"",linea:"",bom:null}, ready:false};
+const S={gafetes:{},bom:{},plan:{},surtidos:{},eventos:{},config:{},
+  me:null, view:null, sel:{fecha:today(),turno:"",linea:"",bom:null,bomDel:new Set()}, ready:false};
 const DEFAULT_CFG={pct:20, tolerancia:10, turnos:{T1:{inicio:"06:00",fin:"14:00"},T2:{inicio:"14:00",fin:"22:00"},T3:{inicio:"22:00",fin:"06:00"}}};
 function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.pct)||20), tolerancia:Number(c.tolerancia)||DEFAULT_CFG.tolerancia, turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
 
@@ -252,6 +271,8 @@ const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",b
 const can={
   editPlan:()=>["admin","planeador"].includes(S.me?.rol),
   confirm:()=>["admin","materialista"].includes(S.me?.rol),
+  // Paros de línea, reconteos y arranque de ensambles.
+  ops:()=>["admin","planeador","materialista","lider"].includes(S.me?.rol),
   admin:()=>S.me?.rol==="admin"
 };
 
@@ -266,34 +287,73 @@ function toast(msg){ const t=document.createElement("div"); t.className="toast";
    Por NP en estación: consumo/h = UPH × cant. por unidad.
    Capacidad en estación = cantidad de empaque (o 1 h de consumo si no se indica).
    Punto de reorden = capacidad × %(mín. 20 %). Se surte al llegar a ese punto,
-   reponiendo capacidad − punto de reorden. Frecuencia = reposición ÷ consumo/h. */
+   reponiendo capacidad − punto de reorden. Frecuencia = reposición ÷ consumo/h.
+   El programa corre en minutos de producción desde el arranque del ensamble: los paros de la línea
+   no cuentan (los surtidos se recorren) y, mientras la línea está detenida, los surtidos siguientes quedan en pausa.
+   Un reconteo reprograma los surtidos aún no confirmados a partir de lo que realmente hay en la estación. */
 function shiftStart(fecha,turno){
   const t=cfg().turnos[turno]||{inicio:"06:00"}; const [h,m]=t.inicio.split(":").map(Number);
   const d=new Date(fecha+"T00:00:00"); d.setHours(h,m||0,0,0); return d;
 }
+// Arranque del ensamble: al inicio del turno, o cuando alguien presiona "Iniciar ensamble" (arranque manual).
+function planStart(p){ if(p.inicioReal) return new Date(p.inicioReal); return p.arranque==="manual"?null:shiftStart(p.fecha,p.turno); }
 function planUph(p){ return Number(p.uph)||Number(S.bom[safeId(p.ensamble)]?.uph)||0; }
+function lineStops(fecha,linea){ return Object.values(S.eventos).filter(e=>e.tipo==="paro"&&e.fecha===fecha&&e.linea===linea); }
+function activeStop(fecha,linea){ return lineStops(fecha,linea).find(e=>!e.fin)||null; }
+function recountsOf(p,est,np){ return Object.values(S.eventos).filter(e=>e.tipo==="reconteo"&&e.planId===p._id&&e.estacion===est&&e.np===np).sort((a,b)=>a.ts-b.ts); }
+// Convierte entre minutos de producción y hora real, saltando los paros de la línea.
+function timeline(p,start){
+  const stops=lineStops(p.fecha,p.linea).map(s=>[Math.max(s.inicio,start),s.fin||Infinity]).filter(([a,b])=>b>a).sort((x,y)=>x[0]-y[0]);
+  return {
+    wall(min){ let t=start, rem=min*60000;
+      for(const [a,b] of stops){ if(b<=t) continue; if(a>t){ if(rem<=a-t) return t+rem; rem-=a-t; } if(b===Infinity) return Infinity; t=b; }
+      return t+rem; },
+    eff(T){ let t=start, m=0;
+      for(const [a,b] of stops){ if(T<=t) break; if(b<=t) continue; if(a>t) m+=Math.min(T,a)-t; t=Math.max(t,b); }
+      if(T>t) m+=T-t; return m/60000; }
+  };
+}
 function computeItems(p){
   const b=S.bom[safeId(p.ensamble)]; if(!b) return {error:"Sin BOM para el ensamble "+p.ensamble, items:[]};
   const uph=planUph(p); if(!uph) return {error:"Falta UPH para "+p.ensamble, items:[]};
-  const pct=cfg().pct/100, start=shiftStart(p.fecha,p.turno);
+  const start=planStart(p); if(!start) return {waiting:true, items:[]};
+  const pct=cfg().pct/100, tl=timeline(p,start.getTime());
   const items=(b.items||[]).map(it=>{
-    const qpu=Number(it.qtyPer)||1, rate=uph*qpu;
+    const est=String(it.estacion||"—"), qpu=Number(it.qtyPer)||1, rate=uph*qpu;
     const cap=Number(it.empaque)>0?Number(it.empaque):Math.ceil(rate);
     const rop=Math.ceil(cap*pct), repl=Math.max(1,cap-rop);
     const intervalMin=repl/rate*60, total=Math.ceil(Number(p.cantidad)*qpu);
-    const trips=[]; let rem=total, k=0;
+    const mk=(k,qty,eff)=>{ const w=tl.wall(eff); return {k,qty,eff,at:w===Infinity?null:new Date(w),id:safeId(p._id+"__"+it.estacion+"__"+it.np+"__"+k)}; };
+    let trips=[], rem=total, k=0;
     while(rem>0 && k<500){
       const q=Math.min(k===0?cap:repl,rem);
-      trips.push({k,qty:q,at:new Date(start.getTime()+k*intervalMin*60000),id:safeId(p._id+"__"+it.estacion+"__"+it.np+"__"+k)});
+      trips.push(mk(k,q,k*intervalMin));
       rem-=q; k++;
     }
-    return {np:it.np,desc:it.desc,estacion:String(it.estacion||"—"),qpu,rate,cap,rop,repl,intervalMin,total,trips};
+    // Cada reconteo conserva los surtidos ya confirmados y reprograma el resto con lo contado en la estación.
+    const recs=recountsOf(p,est,it.np);
+    recs.forEach(r=>{
+      const e=tl.eff(r.ts), qty=Number(r.cantidad)||0, consumed=Math.min(total,rate*e/60);
+      trips=trips.filter(t=>t.k<r.kDesde&&S.surtidos[t.id]);
+      let left=Math.max(0,Math.ceil(total-consumed-qty)), n=0;
+      const first=e+Math.max(0,(qty-rop)/rate*60);
+      while(left>0 && n<500){ const q=Math.min(repl,left); trips.push(mk(r.kDesde+n,q,first+n*intervalMin)); left-=q; n++; }
+    });
+    return {np:it.np,desc:it.desc,estacion:est,qpu,rate,cap,rop,repl,intervalMin,total,trips,recs,tl};
   });
   return {items};
 }
+// Piezas que deberían estar en la estación ahora: último reconteo (o cero) + surtidos confirmados después − consumo.
+function estimateOnHand(it,now){
+  const r=it.recs[it.recs.length-1], fromK=r?r.kDesde:0;
+  const delivered=it.trips.filter(t=>t.k>=fromK&&S.surtidos[t.id]).reduce((n,t)=>n+(Number(S.surtidos[t.id].cantidad)||0),0);
+  const used=it.rate*(it.tl.eff(now)-(r?it.tl.eff(r.ts):0))/60;
+  return Math.max(0,Math.round((r?Number(r.cantidad):0)+delivered-used));
+}
 function tripStatus(t,now){
   const done=S.surtidos[t.id];
-  if(done){ const late=(done.ts-t.at.getTime())>cfg().tolerancia*60000; return {key:late?"late":"done",done}; }
+  if(done){ const late=!!t.at&&(done.ts-t.at.getTime())>cfg().tolerancia*60000; return {key:late?"late":"done",done}; }
+  if(!t.at) return {key:"stop"};
   if(now>t.at.getTime()) return {key:"due"};
   if(t.at.getTime()-now<15*60000) return {key:"soon"};
   return {key:"sched"};
@@ -312,18 +372,18 @@ function tripStatus(t,now){
   if(error||!eq) return renderNotAuthorized(app,session,error);
   Store.equipo=eq.nombre||session.user.email;
   try{ const b=sessionStorage.getItem("sl_me"); if(b) S.pendingBadge=b; }catch(e){}
-  const pending=new Set(["gafetes","bom","plan","config","surtidos"]);
+  const pending=new Set(["gafetes","bom","plan","config","surtidos","eventos"]);
   const first=c=>m=>{ S[c]=m; pending.delete(c); if(!pending.size) S.ready=true; if(S.ready) render(); };
   ["gafetes","bom","plan","config"].forEach(c=>Store.watch(c,first(c)));
-  watchSurtidos(first("surtidos"));
+  watchDia(first);
   setInterval(()=>{ if(["surtido","metricas","lineas"].includes(S.view)) render(true); },30000);
 })();
-// Los surtidos se leen solo para la fecha seleccionada.
-let surtUnsub=null, surtFecha=null;
-function watchSurtidos(cb){
-  if(surtUnsub) surtUnsub();
-  surtFecha=S.sel.fecha; S.surtidos={};
-  surtUnsub=Store.watch("surtidos",cb||(m=>{S.surtidos=m; render(true);}),{field:"fecha",value:surtFecha});
+// Los surtidos y los eventos (paros, reconteos) se leen solo para la fecha seleccionada.
+let diaUnsub=[], surtFecha=null;
+function watchDia(first){
+  diaUnsub.forEach(u=>u());
+  surtFecha=S.sel.fecha; S.surtidos={}; S.eventos={};
+  diaUnsub=["surtidos","eventos"].map(c=>Store.watch(c,first?first(c):(m=>{S[c]=m; render(true);}),{field:"fecha",value:surtFecha}));
 }
 
 /* ===================== Sesión del equipo (Supabase Auth) ===================== */
@@ -363,7 +423,7 @@ function logout(){ S.me=null; S.view=null; try{ sessionStorage.removeItem("sl_me
 
 function render(soft){
   if(!S.ready) return;
-  if(surtFecha!==S.sel.fecha) watchSurtidos();
+  if(surtFecha!==S.sel.fecha) watchDia();
   if(S.me){ S.me=userByBadge(S.me.gafete); if(!S.me) return logout(); }
   if(!S.me && S.pendingBadge){ const b=S.pendingBadge; S.pendingBadge=null; if(login(b)) return; }
   const top=document.getElementById("top"), app=document.getElementById("app");
@@ -429,28 +489,30 @@ function viewPlan(app){
       <div class="fld"><label for="p-turno">Turno</label><select id="p-turno">${Object.keys(c.turnos).map(t=>`<option>${t}</option>`).join("")}</select></div>
       <div class="fld"><label for="p-linea">Línea</label><input id="p-linea" class="w-s" required></div>
       <div class="fld"><label for="p-uph">UPH <span class="muted">(opcional)</span></label><input id="p-uph" type="number" min="1" class="w-xs" placeholder="BOM"></div>
+      <div class="fld"><label for="p-arr">Arranque</label><select id="p-arr"><option value="turno">Al inicio del turno</option><option value="manual">Manual (Iniciar ensamble)</option></select></div>
       <button class="btn pri">Agregar al plan</button>
     </form></div></div>`:""}
   <div class="panel"><div class="tbl-wrap"><table>
-    <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th>${ed?"<th></th>":""}</tr></thead>
+    <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th><th>Arranque</th>${ed?"<th></th>":""}</tr></thead>
     <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr>
       <td class="mono">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}</td>
       <td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):"—"}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
       <td>${hasB?'<span class="pill p-ok">Cargado</span>':'<span class="pill p-bad">Falta BOM</span>'}</td>
-      ${ed?`<td><button class="btn danger" data-del-plan="${p._id}">Quitar</button></td>`:""}</tr>`}).join(""):`<tr><td colspan="9" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
+      <td>${startLabel(p)}</td>
+      ${ed?`<td><button class="btn danger" data-del-plan="${p._id}">Quitar</button></td>`:""}</tr>`}).join(""):`<tr><td colspan="10" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
   </table></div></div>`;
   if(!ed) return;
   document.getElementById("f-plan").onsubmit=async e=>{e.preventDefault();
-    const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,creado:Date.now(),por:S.me.gafete};
+    const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:ffv("p-arr"),creado:Date.now(),por:S.me.gafete};
     S.sel.fecha=p.fecha; await safeWrite(()=>Store.set("plan",newId(),p)); toast("Agregado: "+p.ensamble+" en "+p.linea);
   };
   app.querySelectorAll("[data-del-plan]").forEach(b=>b.onclick=()=>confirmBox("¿Quitar esta fila del plan?","Quitar",()=>safeWrite(()=>Store.del("plan",b.dataset.delPlan))));
-  document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","Cantidad","Turno","Linea","UPH"],[today(),"ENS-1001",480,"T1","L1",60]]);
+  document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","Cantidad","Turno","Linea","UPH","Arranque"],[today(),"ENS-1001",480,"T1","L1",60,"turno"],[today(),"ENS-2002",200,"T1","L2",40,"manual"]]);
   document.getElementById("xl-plan").onchange=e=>readXlsx(e.target.files[0],async rows=>{
     let n=0, bad=0;
     for(const r of rows){
       const g=k=>pick(r,k);
-      const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,creado:Date.now(),por:S.me.gafete};
+      const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:/manual/i.test(String(g(["arranque","inicio","start"])||""))?"manual":"turno",creado:Date.now(),por:S.me.gafete};
       if(/^\d$/.test(p.turno)) p.turno="T"+p.turno;
       if(!p.fecha||!p.ensamble||!(p.cantidad>0)||!p.turno||!p.linea){bad++;continue;}
       await Store.set("plan",newId(),p); n++;
@@ -465,6 +527,8 @@ function viewBom(app){
   const list=Object.values(S.bom).sort((a,b)=>a.ensamble.localeCompare(b.ensamble));
   if(!S.sel.bom||!S.bom[S.sel.bom]) S.sel.bom=list[0]?._id||null;
   const cur=S.sel.bom?S.bom[S.sel.bom]:null;
+  const del=S.sel.bomDel; [...del].forEach(id=>{ if(!S.bom[id]) del.delete(id); });
+  const allSel=list.length>0&&del.size===list.length;
   app.innerHTML=`
   <div class="view-head"><div><h2>BOM · materiales por ensamble</h2><p>Cada NP con su estación, cantidad por unidad y cantidad de empaque (lo que cabe en la estación). El UPH del ensamble se usa si el plan no trae uno.</p></div>
   ${ed?`<div class="row"><button class="btn" id="tpl-bom">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-bom" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
@@ -474,7 +538,10 @@ function viewBom(app){
         <div class="fld" style="flex:1"><label for="e-id">Ensamble</label><input id="e-id" required></div>
         <div class="fld"><label for="e-uph">UPH</label><input id="e-uph" type="number" min="1" class="w-xs" required></div>
         <button class="btn pri">Crear</button></form></div>`:""}
+      ${ed&&list.length?`<div class="bulk"><label><input type="checkbox" id="bom-all" ${allSel?"checked":""}> Seleccionar todos</label>
+        <button class="btn danger" id="bom-del-sel" ${del.size?"":"disabled"}>Eliminar seleccionados (${del.size})</button></div>`:""}
       <div class="tbl-wrap"><table><tbody>${list.length?list.map(b=>`<tr style="cursor:pointer;${b._id===S.sel.bom?"background:var(--accent-soft)":""}" data-sel-bom="${b._id}">
+        ${ed?`<td style="width:32px"><input type="checkbox" data-bom-chk="${b._id}" ${del.has(b._id)?"checked":""} aria-label="Seleccionar ${esc(b.ensamble)}"></td>`:""}
         <td class="mono"><b>${esc(b.ensamble)}</b><div class="small muted">${esc(b.desc||"")}</div></td><td class="num small">${(b.items||[]).length} NP</td><td class="num small">${b.uph?fmtN(b.uph)+" UPH":"sin UPH"}</td></tr>`).join(""):`<tr><td class="empty">Sin ensambles. ${ed?"Crea uno o carga el Excel del BOM.":""}</td></tr>`}</tbody></table></div>
     </div>
     <div class="panel">${cur?`
@@ -495,6 +562,20 @@ function viewBom(app){
   </div>`;
   app.querySelectorAll("[data-sel-bom]").forEach(r=>r.onclick=()=>{S.sel.bom=r.dataset.selBom;render();});
   if(!ed) return;
+  app.querySelectorAll("[data-bom-chk]").forEach(c=>{
+    c.onclick=e=>e.stopPropagation();
+    c.onchange=()=>{ c.checked?del.add(c.dataset.bomChk):del.delete(c.dataset.bomChk); render(); };
+  });
+  if(list.length){
+    document.getElementById("bom-all").onchange=e=>{ del.clear(); if(e.target.checked) list.forEach(b=>del.add(b._id)); render(); };
+    document.getElementById("bom-del-sel").onclick=()=>{
+      const ids=[...del]; if(!ids.length) return;
+      const enPlan=ids.filter(id=>Object.values(S.plan).some(p=>safeId(p.ensamble)===id)).length;
+      confirmBox(`¿Eliminar ${ids.length} ensamble${ids.length>1?"s":""} y su BOM?${enPlan?` ${enPlan} se usa${enPlan>1?"n":""} en el plan de producción y dejará${enPlan>1?"n":""} de calcular surtidos.`:""} No se puede deshacer.`,"Eliminar",async()=>{
+        if(await safeWrite(()=>Store.delMany("bom",ids))){ del.clear(); toast(`${ids.length} ensamble${ids.length>1?"s":""} eliminado${ids.length>1?"s":""}.`); }
+      });
+    };
+  }
   document.getElementById("tpl-bom").onclick=()=>downloadXlsx("plantilla_bom.xlsx",[["Ensamble","UPH","NP","Descripcion","Estacion","CantidadPorUnidad","Empaque"],["ENS-1001",60,"NP-55021","Tornillo M4x10","E10",4,1000],["ENS-1001",60,"NP-30877","Arnés principal","E20",1,40]]);
   document.getElementById("f-ens").onsubmit=async e=>{e.preventDefault(); const id=ffv("e-id"); const k=safeId(id);
     if(S.bom[k]) {S.sel.bom=k; render(); return toast("El ensamble ya existe.");}
@@ -529,20 +610,20 @@ function bindBomImport(){
 function lineBoard(fecha,turno,now){
   const L={};
   Object.values(S.plan).filter(p=>p.fecha===fecha&&(!turno||p.turno===turno)).forEach(p=>{
-    const ln=L[p.linea]=L[p.linea]||{linea:p.linea,ens:new Set(),turnos:new Set(),ok:0,due:0,soon:0,total:0,done:0,pend:[],st:{},err:[]};
+    const ln=L[p.linea]=L[p.linea]||{linea:p.linea,ens:new Set(),turnos:new Set(),ok:0,due:0,soon:0,total:0,done:0,pend:[],st:{},err:[],waiting:[],paro:activeStop(fecha,p.linea)};
     ln.ens.add(p.ensamble); ln.turnos.add(p.turno);
-    const r=computeItems(p); if(r.error) ln.err.push(r.error);
+    const r=computeItems(p); if(r.error) ln.err.push(r.error); if(r.waiting) ln.waiting.push(p);
     r.items.forEach(it=>{
       const st=ln.st[it.estacion]=ln.st[it.estacion]||{due:0,soon:0};
       it.trips.forEach(t=>{ const s=tripStatus(t,now); ln.total++; if(s.done) ln.done++;
-        if(t.at.getTime()<=now){ if(s.done) ln.ok++; else {ln.due++; st.due++; ln.pend.push({p,it,t,min:(now-t.at.getTime())/60000});} }
+        if(t.at&&t.at.getTime()<=now){ if(s.done) ln.ok++; else {ln.due++; st.due++; ln.pend.push({p,it,t,min:(now-t.at.getTime())/60000});} }
         else if(s.key==="soon"){ ln.soon++; st.soon++; }
       });
     });
   });
   return Object.values(L).map(l=>{
     l.pct=l.ok+l.due?Math.floor(l.ok/(l.ok+l.due)*100):100;
-    l.state=l.err.length&&!l.total?"err":l.due?"due":l.soon?"soon":"ok";
+    l.state=l.paro?"stop":l.err.length&&!l.total?"err":l.due?"due":l.soon?"soon":l.waiting.length&&!l.total?"wait":"ok";
     l.pend.sort((a,b)=>b.min-a.min); return l;
   }).sort((a,b)=>(b.due-a.due)||a.linea.localeCompare(b.linea,undefined,{numeric:true}));
 }
@@ -550,8 +631,7 @@ function viewLineas(app){
   const c=cfg(), now=Date.now(), lines=lineBoard(S.sel.fecha,S.sel.turno,now);
   const al100=lines.filter(l=>l.state==="ok"||l.state==="soon").length, falt=lines.filter(l=>l.state==="due").length;
   const pendNP=lines.reduce((n,l)=>n+l.due,0);
-  const pill={ok:'<span class="pill p-ok">Al 100%</span>',soon:'<span class="pill p-warn">Al 100% · surtido próximo</span>',due:'<span class="pill p-bad">Falta resurtir</span>',err:'<span class="pill p-idle">Sin BOM o UPH</span>'};
-  const ago=m=>m<60?Math.max(1,Math.round(m))+" min":Math.floor(m/60)+" h "+String(Math.round(m%60)).padStart(2,"0")+" min";
+  const pill={ok:'<span class="pill p-ok">Al 100%</span>',soon:'<span class="pill p-warn">Al 100% · surtido próximo</span>',due:'<span class="pill p-bad">Falta resurtir</span>',err:'<span class="pill p-idle">Sin BOM o UPH</span>',stop:'<span class="pill p-warn">Línea detenida</span>',wait:'<span class="pill p-idle">Esperando arranque</span>'};
   app.innerHTML=`
   <div class="view-head"><div><h2>Estado de líneas</h2><p>Una línea está al 100% cuando todos los surtidos que ya tocaban están confirmados. Las que tienen surtidos vencidos aparecen primero.</p></div></div>
   <div class="filters">
@@ -568,22 +648,26 @@ function viewLineas(app){
   ${lines.length?`<div class="lines">${lines.map(l=>`
     <section class="panel line-card st-${l.state}">
       <div class="lc-head"><div><div class="lc-name">${esc(l.linea)}</div><div class="small muted">${[...l.ens].map(esc).join(", ")} · ${[...l.turnos].join(", ")}</div></div>
-        <div class="lc-pct num">${l.state==="err"?"—":l.pct+"%"}</div></div>
+        <div class="lc-pct num">${l.state==="err"||l.state==="wait"?"—":l.pct+"%"}</div></div>
       <div class="lc-body">
         ${pill[l.state]}
+        ${l.paro?`<div class="small" style="color:var(--warn)">Detenida desde ${fmtT(new Date(l.paro.inicio))} (${ago((now-l.paro.inicio)/60000)})${l.paro.motivo?" · "+esc(l.paro.motivo):""}. Los surtidos siguientes están en pausa.</div>`:""}
+        ${l.waiting.length?`<div class="small muted">${l.waiting.length} ensamble${l.waiting.length>1?"s":""} esperando arranque: ${l.waiting.map(p=>esc(p.ensamble)).join(", ")}</div>`:""}
         <div class="meter"><i style="width:${l.pct}%;background:var(${l.state==="due"?"--bad":"--ok"})"></i></div>
         <div class="small muted">${l.ok} de ${l.ok+l.due} surtidos al momento · ${l.done}/${l.total} del día${l.soon?` · ${l.soon} en los próximos 15 min`:""}</div>
         <div class="st-chips" aria-label="Estaciones">${Object.entries(l.st).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).map(([e,s])=>`<span class="st-chip ${s.due?"due":s.soon?"soon":"ok"}" title="Estación ${esc(e)}: ${s.due?s.due+" vencido(s)":s.soon?"surtido próximo":"al 100%"}">${esc(e)}</span>`).join("")}</div>
         ${l.pend.length?`<div class="pend"><div class="lbl">Pendiente de resurtir</div>${l.pend.slice(0,6).map(x=>`<div class="pend-row"><span class="mono"><b>${esc(x.it.estacion)}</b> · ${esc(x.it.np)}</span><span class="mono">${fmtN(x.t.qty)} pzs</span><span class="late-by">hace ${ago(x.min)}</span></div>`).join("")}${l.pend.length>6?`<div class="small muted">y ${l.pend.length-6} más</div>`:""}</div>`:""}
         ${l.err.length?`<div class="small" style="color:var(--bad)">${[...new Set(l.err)].map(esc).join(" · ")}</div>`:""}
-        <div><button class="btn ${l.state==="due"?"pri":""}" data-go-line="${esc(l.linea)}">Ver surtido de ${esc(l.linea)}</button></div>
+        <div class="row"><button class="btn ${l.state==="due"?"pri":""}" data-go-line="${esc(l.linea)}">Ver surtido de ${esc(l.linea)}</button>${can.ops()?stopBtn(S.sel.fecha,l.linea):""}</div>
       </div>
     </section>`).join("")}</div>`
   :`<div class="panel empty">No hay plan para ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}. ${can.editPlan()?"Cárgalo en la pestaña Plan de producción.":"Pide al planeador que cargue el plan."}</div>`}`;
   document.getElementById("l-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
   document.getElementById("l-turno").onchange=e=>{S.sel.turno=e.target.value;render();};
   app.querySelectorAll("[data-go-line]").forEach(b=>b.onclick=()=>{S.sel.linea=b.dataset.goLine; S.view="surtido"; render();});
+  bindLineOps(app);
 }
+const ago=m=>m<60?Math.max(1,Math.round(m))+" min":Math.floor(m/60)+" h "+String(Math.round(m%60)).padStart(2,"0")+" min";
 
 /* ===================== Surtido ===================== */
 function viewSurtido(app){
@@ -599,12 +683,14 @@ function viewSurtido(app){
       const st=stations[key]=stations[key]||{linea:p.linea,estacion:it.estacion,rows:[]};
       const statuses=it.trips.map(t=>({t,s:tripStatus(t,now)}));
       tot+=statuses.length; done+=statuses.filter(x=>x.s.done).length; due+=statuses.filter(x=>x.s.key==="due").length;
-      const nxt=statuses.find(x=>!x.s.done); if(nxt&&(!next||nxt.t.at<next)) next=nxt.t.at;
+      const nxt=statuses.find(x=>!x.s.done); if(nxt&&nxt.t.at&&(!next||nxt.t.at<next)) next=nxt.t.at;
       st.rows.push({p,it,statuses,nxt});
     });
   });
   const stList=Object.values(stations).sort((a,b)=>(a.linea+a.estacion).localeCompare(b.linea+b.estacion,undefined,{numeric:true}));
-  stList.forEach(s=>s.rows.sort((a,b)=>(a.nxt?a.nxt.t.at:Infinity)-(b.nxt?b.nxt.t.at:Infinity)));
+  const atOf=r=>r.nxt&&r.nxt.t.at?r.nxt.t.at.getTime():Infinity;
+  stList.forEach(s=>s.rows.sort((a,b)=>atOf(a)-atOf(b)));
+  const ctlLines=[...new Set(shown.map(p=>p.linea))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   app.innerHTML=`
   <div class="view-head"><div><h2>Surtido de línea</h2><p>NP a surtir por estación según el plan. Punto de reorden al ${c.pct}% de la capacidad de la estación; cada surtido repone el ${100-c.pct}%. ${can.confirm()?"Confirma cada surtido con tu gafete y el de quien recibe.":""}</p></div></div>
   <div class="filters">
@@ -620,29 +706,136 @@ function viewSurtido(app){
     <div><div class="lbl">Siguiente surtido</div><div class="v">${next?fmtT(next):"—"}</div></div>
   </div>
   ${errors.length?`<div class="note" style="margin-bottom:16px;border-color:var(--bad);color:var(--bad)">${[...new Set(errors)].map(esc).join(" · ")}. Corrígelo en BOM o Plan.</div>`:""}
+  ${ctlLines.length?`<div class="panel" style="margin-bottom:16px"><div class="ph"><h3>Control de línea</h3><span class="muted small">Paros y arranques recorren el programa de surtido</span></div>
+    ${ctlLines.map(l=>lineCtl(l,shown.filter(p=>p.linea===l),now)).join("")}</div>`:""}
   ${stList.length?`<div class="stations">${stList.map(st=>`
     <section class="panel station"><div class="ph"><h3><span class="st-id">${esc(st.linea)}</span> Estación ${esc(st.estacion)}</h3><span class="muted small">${st.rows.length} NP</span></div>
     ${st.rows.map(r=>npRow(r,now)).join("")}</section>`).join("")}</div>`
-  :`<div class="panel empty">No hay plan para ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}. ${can.editPlan()?"Cárgalo en la pestaña Plan de producción.":"Pide al planeador que cargue el plan."}</div>`}`;
+  :shown.length?"":`<div class="panel empty">No hay plan para ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}. ${can.editPlan()?"Cárgalo en la pestaña Plan de producción.":"Pide al planeador que cargue el plan."}</div>`}`;
   document.getElementById("s-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
   document.getElementById("s-turno").onchange=e=>{S.sel.turno=e.target.value;render();};
   document.getElementById("s-linea").onchange=e=>{S.sel.linea=e.target.value;render();};
   app.querySelectorAll("[data-confirm]").forEach(b=>b.onclick=()=>{
     const [pid,idx,est,np]=JSON.parse(b.dataset.confirm); const p=S.plan[pid];
-    const it=computeItems(p).items.find(x=>x.estacion===est&&x.np===np); openConfirm(p,it,it.trips[idx]);
+    const it=computeItems(p).items.find(x=>x.estacion===est&&x.np===np); openConfirm(p,it,it.trips.find(t=>t.k===idx));
+  });
+  app.querySelectorAll("[data-recount]").forEach(b=>b.onclick=()=>{
+    const [pid,est,np]=JSON.parse(b.dataset.recount); const p=S.plan[pid];
+    openRecount(p,computeItems(p).items.find(x=>x.estacion===est&&x.np===np));
+  });
+  bindLineOps(app);
+}
+// Fila de control por línea: paro/reanudación y arranque de cada ensamble del plan.
+function lineCtl(linea,plans,now){
+  const paro=activeStop(S.sel.fecha,linea), ops=can.ops();
+  const paros=lineStops(S.sel.fecha,linea).filter(e=>e.fin), perdido=paros.reduce((n,e)=>n+(e.fin-e.inicio),0)/60000;
+  return `<div class="ctl-row">
+    <div class="ctl-line"><span class="st-id">${esc(linea)}</span>
+      ${paro?`<span class="pill p-warn">Detenida desde ${fmtT(new Date(paro.inicio))} · ${ago((now-paro.inicio)/60000)}</span>${paro.motivo?`<span class="small muted">${esc(paro.motivo)}</span>`:""}`:'<span class="pill p-ok">En operación</span>'}
+      ${paros.length?`<span class="small muted">${paros.length} paro${paros.length>1?"s":""} hoy · ${ago(perdido)}</span>`:""}</div>
+    <div>${ops?stopBtn(S.sel.fecha,linea):""}</div>
+    <div class="ctl-plans">${plans.map(p=>{
+      const confirmed=Object.values(S.surtidos).some(r=>r.planId===p._id);
+      const act=!ops?"":!planStart(p)?`<button class="btn ok" data-start-plan="${p._id}">Iniciar ensamble</button>`
+        :(!p.inicioReal&&!confirmed?`<button class="btn ghost" data-unstart-plan="${p._id}" title="El ensamble no arrancó al inicio del turno: deja sus surtidos en espera hasta que se inicie">No ha arrancado</button>`:"");
+      return `<div class="ctl-plan"><span class="grow"><b class="mono">${esc(p.ensamble)}</b> <span class="muted">· ${esc(p.turno)} · ${fmtN(p.cantidad)} pzs</span></span>${startLabel(p)}${act}</div>`;
+    }).join("")}</div>
+  </div>`;
+}
+function startLabel(p){
+  if(p.inicioReal) return `<span class="pill p-acc">Iniciado ${fmtT(new Date(p.inicioReal))}</span>`;
+  if(p.arranque==="manual") return '<span class="pill p-idle">Esperando arranque</span>';
+  return `<span class="small muted">Inicio de turno ${esc(cfg().turnos[p.turno]?.inicio||"")}</span>`;
+}
+function stopBtn(fecha,linea){
+  const paro=activeStop(fecha,linea);
+  return paro?`<button class="btn ok" data-resume="${paro._id}">Reanudar línea</button>`
+    :`<button class="btn" data-stop="${esc(linea)}" style="border-color:var(--warn);color:var(--warn)">Línea detenida</button>`;
+}
+function bindLineOps(app){
+  app.querySelectorAll("[data-stop]").forEach(b=>b.onclick=()=>openStop(b.dataset.stop));
+  app.querySelectorAll("[data-resume]").forEach(b=>b.onclick=()=>{
+    const e=S.eventos[b.dataset.resume]; if(!e) return;
+    confirmBox(`¿Reanudar la línea ${e.linea}? Estuvo detenida ${ago((Date.now()-e.inicio)/60000)}; los surtidos pendientes se recorren ese tiempo.`,"Reanudar",async()=>{
+      if(await safeWrite(()=>Store.set("eventos",e._id,Object.assign({},e,{fin:Date.now(),finPor:S.me.gafete,finPorNombre:S.me.nombre})))) toast(`Línea ${e.linea} reanudada.`);
+    });
+  });
+  app.querySelectorAll("[data-start-plan]").forEach(b=>b.onclick=()=>{
+    const p=S.plan[b.dataset.startPlan];
+    confirmBox(`¿Iniciar el ensamble ${p.ensamble} en ${p.linea} ahora (${fmtT(new Date())})? El primer surtido, con la estación llena, queda programado a esta hora.`,"Iniciar ensamble",async()=>{
+      if(await safeWrite(()=>Store.set("plan",p._id,Object.assign({},p,{arranque:"manual",inicioReal:Date.now(),inicioPor:S.me.gafete,inicioPorNombre:S.me.nombre})))) toast(`${p.ensamble} iniciado en ${p.linea}.`);
+    });
+  });
+  app.querySelectorAll("[data-unstart-plan]").forEach(b=>b.onclick=()=>{
+    const p=S.plan[b.dataset.unstartPlan];
+    confirmBox(`¿${p.ensamble} no arrancó al inicio del turno? Sus surtidos quedan en espera hasta que alguien presione "Iniciar ensamble".`,"Dejar en espera",
+      ()=>safeWrite(()=>Store.set("plan",p._id,Object.assign({},p,{arranque:"manual",inicioReal:null}))));
   });
 }
+function openStop(linea){
+  const root=document.getElementById("modal-root");
+  const motivos=["Falla de máquina","Falta de material","Calidad","Cambio de modelo","Junta o comida","Otro"];
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="st-t">
+    <div class="ph"><h3 id="st-t">Línea ${esc(linea)} detenida</h3><button class="btn ghost" id="st-x">Cancelar</button></div>
+    <div class="pb">
+      <div class="note">Desde ahora (${fmtT(new Date())}) los surtidos de la línea quedan en pausa y no se pueden confirmar. Al reanudar, los pendientes se recorren el tiempo que estuvo detenida.</div>
+      <div class="fld"><label for="st-m">Motivo</label><select id="st-m">${motivos.map(m=>`<option>${m}</option>`).join("")}</select></div>
+      <div class="fld"><label for="st-n">Nota <span class="muted">(opcional)</span></label><input id="st-n" autocomplete="off"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn pri" id="st-ok">Registrar paro</button></div>
+    </div></div></div>`;
+  const close=()=>root.innerHTML="";
+  document.getElementById("st-x").onclick=close;
+  document.getElementById("st-ok").onclick=async e=>{
+    if(activeStop(S.sel.fecha,linea)){ close(); return toast(`La línea ${linea} ya está detenida.`); }
+    e.target.disabled=true; const nota=ffv("st-n");
+    const ev={tipo:"paro",fecha:S.sel.fecha,linea,inicio:Date.now(),fin:null,motivo:ffv("st-m")+(nota?" · "+nota:""),por:S.me.gafete,porNombre:S.me.nombre};
+    if(await safeWrite(()=>Store.set("eventos",newId(),ev))){ close(); toast(`Paro registrado en ${linea}.`); } else e.target.disabled=false;
+  };
+}
+function openRecount(p,it){
+  const root=document.getElementById("modal-root"), now=Date.now();
+  const est=estimateOnHand(it,now);
+  const kDesde=it.trips.filter(t=>S.surtidos[t.id]).reduce((m,t)=>Math.max(m,t.k+1),0);
+  const motivos=["Material entregado por otra área (purga)","Conteo distinto al esperado","Material dañado o retirado","Otro"];
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="rc-t">
+    <div class="ph"><h3 id="rc-t">Recontar material</h3><button class="btn ghost" id="rc-x">Cancelar</button></div>
+    <div class="pb">
+      <div class="note"><b class="mono">${esc(it.np)}</b> · Línea <b>${esc(p.linea)}</b>, estación <b>${esc(it.estacion)}</b> · ${esc(p.ensamble)}<br>
+        Estimado en estación según el programa: <b class="mono">≈ ${fmtN(est)} pzs</b> · punto de reorden ${fmtN(it.rop)} / ${fmtN(it.cap)}</div>
+      <div class="fld"><label for="rc-q">Piezas contadas en la estación</label><input id="rc-q" type="number" min="0" step="1" class="badge-in" style="margin-top:0" inputmode="numeric" autocomplete="off"></div>
+      <div class="fld"><label for="rc-m">Motivo</label><select id="rc-m">${motivos.map(m=>`<option>${m}</option>`).join("")}</select></div>
+      <div class="fld"><label for="rc-n">Nota <span class="muted">(opcional)</span></label><input id="rc-n" autocomplete="off"></div>
+      <p class="small muted" style="margin:0">Los surtidos ya confirmados se conservan; los pendientes se recalculan a partir de lo contado.</p>
+      <div class="err" id="rc-err"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn pri" id="rc-ok">Guardar reconteo</button></div>
+    </div></div></div>`;
+  const close=()=>root.innerHTML="";
+  document.getElementById("rc-x").onclick=close;
+  const q=document.getElementById("rc-q"); q.focus();
+  q.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("rc-ok").click(); } };
+  document.getElementById("rc-ok").onclick=async e=>{
+    const n=Number(q.value);
+    if(q.value===""||!(n>=0)) return document.getElementById("rc-err").textContent="Escribe cuántas piezas hay en la estación.";
+    e.target.disabled=true; const nota=ffv("rc-n");
+    const ev={tipo:"reconteo",fecha:p.fecha,planId:p._id,linea:p.linea,ensamble:p.ensamble,estacion:it.estacion,np:it.np,cantidad:Math.round(n),esperado:est,kDesde,
+      ts:Date.now(),motivo:ffv("rc-m")+(nota?" · "+nota:""),por:S.me.gafete,porNombre:S.me.nombre};
+    if(await safeWrite(()=>Store.insert("eventos",newId(),ev))){ close(); toast(`Reconteo guardado: ${fmtN(n)} pzs de ${it.np}. Surtidos recalculados.`); }
+    else e.target.disabled=false;
+  };
+}
 function npRow({p,it,statuses,nxt},now){
-  const cls={done:"done",late:"late",due:"due",soon:"",sched:""};
-  const pillOf=k=>({due:'<span class="pill p-bad">Vencido</span>',soon:'<span class="pill p-warn">Próximo</span>',sched:'<span class="pill p-idle">Programado</span>'}[k]);
-  const allDone=!nxt;
+  const cls={done:"done",late:"late",due:"due",soon:"",sched:"",stop:"stop"};
+  const pillOf=k=>({due:'<span class="pill p-bad">Vencido</span>',soon:'<span class="pill p-warn">Próximo</span>',sched:'<span class="pill p-idle">Programado</span>',stop:'<span class="pill p-warn">Línea detenida</span>'}[k]);
+  const allDone=!nxt, rc=it.recs[it.recs.length-1];
   return `<div class="np-row">
     <div style="min-width:0"><div class="np">${esc(it.np)} <span class="muted" style="font-family:var(--f-body);font-weight:400;font-size:13px">${esc(it.desc||"")}</span></div>
       <div class="plan-line">${esc(p.ensamble)} · ${esc(p.turno)} · ${fmtN(p.cantidad)} pzs</div>
       <div class="np-meta"><span>Cada <b>${fmtInterval(it.intervalMin)}</b></span><span>Surtir <b>${fmtN(it.repl)}</b></span><span>Reorden en <b>${fmtN(it.rop)}</b> / ${fmtN(it.cap)}</span><span>Consumo <b>${fmtN(it.rate,1)}</b>/h</span></div></div>
-    <div class="np-act">${allDone?'<span class="pill p-ok">Completo</span>':`${pillOf(nxt.s.key)}<span class="mono small">${fmtT(nxt.t.at)} · ${fmtN(nxt.t.qty)} pzs</span>
-      ${can.confirm()?`<button class="btn ${nxt.s.key==="due"?"ok":"pri"}" data-confirm='${esc(JSON.stringify([p._id,nxt.t.k,it.estacion,it.np]))}'>Confirmar surtido</button>`:""}`}</div>
-    <div class="trips" aria-label="Surtidos del turno">${statuses.map(x=>`<span class="trip ${cls[x.s.key]} ${nxt&&x===nxt?"next":""}" title="${x.s.done?"Surtió "+esc(x.s.done.surtioNombre)+" · recibió "+esc(x.s.done.recibioNombre)+" · "+fmtT(new Date(x.s.done.ts)):"Programado "+fmtT(x.t.at)}">${fmtT(x.t.at)}</span>`).join("")}</div>
+    <div class="np-act">${allDone?'<span class="pill p-ok">Completo</span>':`${pillOf(nxt.s.key)}<span class="mono small">${nxt.t.at?fmtT(nxt.t.at):"En pausa"} · ${fmtN(nxt.t.qty)} pzs</span>
+      ${can.confirm()&&nxt.t.at?`<button class="btn ${nxt.s.key==="due"?"ok":"pri"}" data-confirm='${esc(JSON.stringify([p._id,nxt.t.k,it.estacion,it.np]))}'>Confirmar surtido</button>`:""}`}
+      ${can.ops()?`<button class="btn ghost" data-recount='${esc(JSON.stringify([p._id,it.estacion,it.np]))}'>Recontar material</button>`:""}</div>
+    ${rc?`<div class="recount-line">Reconteo ${fmtT(new Date(rc.ts))}: ${fmtN(rc.cantidad)} pzs (esperado ≈ ${fmtN(rc.esperado)}) · ${esc(rc.motivo)} · ${esc(rc.porNombre)}</div>`:""}
+    <div class="trips" aria-label="Surtidos del turno">${statuses.map(x=>`<span class="trip ${cls[x.s.key]} ${nxt&&x===nxt?"next":""}" title="${x.s.done?"Surtió "+esc(x.s.done.surtioNombre)+" · recibió "+esc(x.s.done.recibioNombre)+" · "+fmtT(new Date(x.s.done.ts)):x.t.at?"Programado "+fmtT(x.t.at):"En pausa: línea detenida"}">${x.s.done&&!x.t.at?fmtT(new Date(x.s.done.ts)):x.t.at?fmtT(x.t.at):"pausa"}</span>`).join("")}</div>
   </div>`;
 }
 const fmtInterval=m=>m>=60?(Math.floor(m/60)+" h "+String(Math.round(m%60)).padStart(2,"0")+" min"):Math.max(1,Math.round(m))+" min";
@@ -651,10 +844,11 @@ function openConfirm(p,it,trip){
   const root=document.getElementById("modal-root");
   // Quien surte es el materialista con sesión; quien recibe solo escanea su gafete y con eso queda registrado.
   const s=S.me;
+  if(!trip||!trip.at) return toast("La línea está detenida: el surtido queda en pausa hasta reanudarla.");
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="mc-t">
     <div class="ph"><h3 id="mc-t">Confirmar surtido</h3><button class="btn ghost" id="mc-x">Cancelar</button></div>
     <div class="pb">
-      <div class="note"><b class="mono">${esc(it.np)}</b> · ${fmtN(trip.qty)} pzs → Línea <b>${esc(p.linea)}</b>, estación <b>${esc(it.estacion)}</b><br>Programado ${fmtT(trip.at)} · surtido ${trip.k+1} de ${it.trips.length} · Surte <b>${esc(s.nombre)}</b></div>
+      <div class="note"><b class="mono">${esc(it.np)}</b> · ${fmtN(trip.qty)} pzs → Línea <b>${esc(p.linea)}</b>, estación <b>${esc(it.estacion)}</b><br>Programado ${fmtT(trip.at)} · surtido ${it.trips.indexOf(trip)+1} de ${it.trips.length} · Surte <b>${esc(s.nombre)}</b></div>
       <div class="fld"><label for="mc-r">Quien recibe: escanea su gafete</label><input id="mc-r" class="badge-in" style="margin-top:0" autocomplete="off" inputmode="numeric" placeholder="••••••"></div>
       <div class="err" id="mc-err"></div>
     </div></div></div>`;
@@ -685,15 +879,16 @@ function viewMetricas(app){
   plans.forEach(p=>computeItems(p).items.forEach(it=>it.trips.forEach(t=>{
     const s=tripStatus(t,now); const L=byLine[p.linea]=byLine[p.linea]||{tot:0,ok:0,late:0,due:0};
     tot++; L.tot++;
-    if(s.done){done++; if(s.key==="done"){onTime++;L.ok++;}else L.late++; delays.push((s.done.ts-t.at.getTime())/60000);}
+    if(s.done){done++; if(s.key==="done"){onTime++;L.ok++;}else L.late++; if(t.at) delays.push((s.done.ts-t.at.getTime())/60000);}
     else if(s.key==="due"){due++;L.due++;}
   })));
   const recs=Object.values(S.surtidos).filter(r=>r.fecha===S.sel.fecha&&(!S.sel.turno||r.turno===S.sel.turno)).sort((a,b)=>b.ts-a.ts);
   const byMat={}; recs.forEach(r=>{const m=byMat[r.surtio]=byMat[r.surtio]||{nombre:r.surtioNombre,n:0,pzs:0,late:0}; m.n++; m.pzs+=Number(r.cantidad)||0; if(r.ts-r.programado>c.tolerancia*60000) m.late++;});
   const vencidosAhora=due;
+  const evs=Object.values(S.eventos).filter(e=>e.fecha===S.sel.fecha&&(!S.sel.turno||e.tipo==="paro"||S.plan[e.planId]?.turno===S.sel.turno)).sort((a,b)=>(b.ts||b.inicio)-(a.ts||a.inicio));
   const pct=(a,b)=>b?Math.round(a/b*100):0;
   const avgDelay=delays.length?delays.reduce((a,b)=>a+b,0)/delays.length:0;
-  const elapsed=plans.reduce((n,p)=>n+computeItems(p).items.reduce((m,it)=>m+it.trips.filter(t=>t.at.getTime()<=now).length,0),0);
+  const elapsed=plans.reduce((n,p)=>n+computeItems(p).items.reduce((m,it)=>m+it.trips.filter(t=>t.at&&t.at.getTime()<=now).length,0),0);
   const lines=Object.keys(byLine).sort();
   app.innerHTML=`
   <div class="view-head"><div><h2>Métricas de surtido</h2><p>Cumplimiento contra el programa calculado del plan. "A tiempo" = confirmado dentro de ${c.tolerancia} min de la hora programada.</p></div></div>
@@ -719,7 +914,14 @@ function viewMetricas(app){
   </div>
   <div class="panel" style="margin-top:16px"><div class="ph"><h3>Bitácora de surtidos</h3><span class="muted small">${recs.length} registros</span></div><div class="tbl-wrap"><table>
     <thead><tr><th>Hora</th><th>Prog.</th><th>Línea</th><th>Estación</th><th>NP</th><th class="num">Cant.</th><th>Surtió</th><th>Recibió</th><th>Estado</th></tr></thead>
-    <tbody>${recs.length?recs.slice(0,200).map(r=>{const late=r.ts-r.programado>c.tolerancia*60000;return`<tr><td class="mono">${fmtT(new Date(r.ts))}</td><td class="mono muted">${fmtT(new Date(r.programado))}</td><td>${esc(r.linea)}</td><td>${esc(r.estacion)}</td><td class="mono">${esc(r.np)}</td><td class="num">${fmtN(r.cantidad)}</td><td>${esc(r.surtioNombre)}</td><td>${esc(r.recibioNombre)}</td><td>${late?'<span class="pill p-warn">Tarde</span>':'<span class="pill p-ok">A tiempo</span>'}</td></tr>`}).join(""):`<tr><td colspan="9" class="empty">Aún no hay surtidos confirmados en esta fecha.</td></tr>`}</tbody></table></div></div>`;
+    <tbody>${recs.length?recs.slice(0,200).map(r=>{const late=r.ts-r.programado>c.tolerancia*60000;return`<tr><td class="mono">${fmtT(new Date(r.ts))}</td><td class="mono muted">${fmtT(new Date(r.programado))}</td><td>${esc(r.linea)}</td><td>${esc(r.estacion)}</td><td class="mono">${esc(r.np)}</td><td class="num">${fmtN(r.cantidad)}</td><td>${esc(r.surtioNombre)}</td><td>${esc(r.recibioNombre)}</td><td>${late?'<span class="pill p-warn">Tarde</span>':'<span class="pill p-ok">A tiempo</span>'}</td></tr>`}).join(""):`<tr><td colspan="9" class="empty">Aún no hay surtidos confirmados en esta fecha.</td></tr>`}</tbody></table></div></div>
+  <div class="panel" style="margin-top:16px"><div class="ph"><h3>Paros y reconteos</h3><span class="muted small">${evs.length} registros</span></div><div class="tbl-wrap"><table>
+    <thead><tr><th>Hora</th><th>Tipo</th><th>Línea</th><th>Detalle</th><th>Motivo</th><th>Registró</th></tr></thead>
+    <tbody>${evs.length?evs.map(e=>e.tipo==="paro"?`<tr><td class="mono">${fmtT(new Date(e.inicio))}</td><td><span class="pill p-warn">Paro</span></td><td>${esc(e.linea)}</td>
+      <td>${e.fin?`Hasta ${fmtT(new Date(e.fin))} · ${ago((e.fin-e.inicio)/60000)}`:`<b style="color:var(--warn)">En curso</b> · ${ago((now-e.inicio)/60000)}`}</td><td>${esc(e.motivo||"")}</td><td>${esc(e.porNombre||"")}</td></tr>`
+      :`<tr><td class="mono">${fmtT(new Date(e.ts))}</td><td><span class="pill p-acc">Reconteo</span></td><td>${esc(e.linea)}</td>
+      <td><span class="mono">${esc(e.estacion)} · ${esc(e.np)}</span> · ${fmtN(e.cantidad)} pzs (esperado ≈ ${fmtN(e.esperado)})</td><td>${esc(e.motivo||"")}</td><td>${esc(e.porNombre||"")}</td></tr>`).join("")
+      :`<tr><td colspan="6" class="empty">Sin paros ni reconteos en esta fecha.</td></tr>`}</tbody></table></div></div>`;
   document.getElementById("m-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
   document.getElementById("m-turno").onchange=e=>{S.sel.turno=e.target.value;render();};
 }

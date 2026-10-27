@@ -49,7 +49,7 @@ Al abrir la app con un equipo autorizado y sin gafetes registrados, la app pide 
 
 Cada sección tiene un botón **Plantilla Excel** con las columnas esperadas:
 
-- **Plan:** Fecha, Ensamble, Cantidad, Turno, Linea, UPH (opcional)
+- **Plan:** Fecha, Ensamble, Cantidad, Turno, Linea, UPH (opcional), Arranque (opcional: `turno` o `manual`)
 - **BOM:** Ensamble, UPH, NP, Descripcion, Estacion, CantidadPorUnidad, Empaque
 - **Gafetes:** Gafete, Nombre, Area, Rol (`admin`, `planeador`, `materialista`, `lider`, `supervisor`, `receptor`)
 
@@ -62,7 +62,19 @@ Para cada NP en su estación:
 - Cantidad a surtir = empaque − punto de reorden
 - Frecuencia = cantidad a surtir ÷ consumo por hora
 
-El primer surtido es a la hora de inicio del turno, con la estación llena. Una línea está **al 100 %** cuando todos los surtidos cuya hora ya pasó están confirmados.
+El primer surtido es al arranque del ensamble, con la estación llena. Una línea está **al 100 %** cuando todos los surtidos cuya hora ya pasó están confirmados.
+
+## Ajustes al programa de surtido
+
+En la pestaña **Surtido**, el panel **Control de línea** y cada NP tienen estas opciones (admin, planeador, materialista y líder de línea):
+
+- **Línea detenida / Reanudar línea:** mientras la línea está detenida, los surtidos siguientes quedan en pausa y no se pueden confirmar. Al reanudar, los pendientes se recorren el tiempo que estuvo detenida. También está en cada tarjeta de **Líneas**.
+- **Iniciar ensamble:** un ensamble con arranque **manual** no genera surtidos hasta que alguien lo inicia; el primer surtido queda a esa hora. Si un ensamble con arranque al inicio del turno no arrancó (y aún no tiene surtidos confirmados), **No ha arrancado** lo deja en espera.
+- **Recontar material:** cuando otra área entrega material (purga, etc.) o el conteo no coincide, se captura lo que realmente hay en la estación. Los surtidos confirmados se conservan y los pendientes se recalculan con lo contado: el siguiente surtido es cuando lo contado baja al punto de reorden, y el total por surtir se reduce en lo que ya estaba en la estación.
+
+Los paros y reconteos se guardan en `sl_eventos` y aparecen en **Métricas → Paros y reconteos**. No se borran desde la app; un reconteo equivocado se corrige con otro reconteo.
+
+En **BOM**, las casillas de la lista de ensambles y **Seleccionar todos** permiten eliminar varios ensambles a la vez.
 
 ## Configuración
 
