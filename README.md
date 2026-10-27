@@ -15,6 +15,7 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 |---|---|
 | Administrador | Todo, incluidos Gafetes y ajustes |
 | Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas |
+| Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas |
 | Materialista | Líneas y Surtido (confirma surtidos) |
 | Líder de línea | Líneas, Surtido, Métricas |
 | Supervisor | Líneas, Métricas, Surtido, Plan (consulta) |
@@ -51,7 +52,7 @@ Cada sección tiene un botón **Plantilla Excel** con las columnas esperadas:
 
 - **Plan:** Fecha, Ensamble, Cantidad, Turno, Linea, UPH, Arranque (opcional: `turno` o `manual`)
 - **BOM:** Ensamble, NP, Descripcion, Estacion, CantidadPorUnidad, Empaque, UPH (opcional; normalmente va en el plan)
-- **Gafetes:** Gafete, Nombre, Area, Rol (`admin`, `planeador`, `materialista`, `lider`, `supervisor`, `receptor`)
+- **Gafetes:** Gafete, Nombre, Area, Rol (`admin`, `planeador`, `gerente`, `materialista`, `lider`, `supervisor`, `receptor`)
 
 ## Cálculo del surtido
 
@@ -63,6 +64,17 @@ Para cada NP en su estación:
 - Frecuencia = cantidad a surtir ÷ consumo por hora
 
 El primer surtido es al arranque del ensamble, con la estación llena. Una línea está **al 100 %** cuando todos los surtidos cuya hora ya pasó están confirmados.
+
+## Anticipación y aprobación del plan
+
+El plan se postea con anticipación (1 día por defecto; el administrador lo cambia en **Gafetes y ajustes → Anticipación del plan**, y con 0 no se pide aprobación).
+
+- Altas, cambios (**Editar**: cantidad, UPH, turno, línea) y bajas (**Quitar**) de un plan cuya fecha queda dentro de ese plazo, o ya pasó, se envían a **aprobación de Gerencia**. Con el plazo de 1 día, lo que se postea hoy para mañana o después entra directo; lo de hoy requiere aprobación.
+- Mientras está pendiente, el plan vigente no cambia y un alta pendiente no genera surtidos.
+- Gerencia y el administrador ven la cuenta de pendientes en la pestaña del plan y los aprueban o rechazan; sus propios cambios se aplican directo. Quien solicitó puede cancelar la solicitud.
+- Cada plan guarda un historial de quién solicitó y quién aprobó o rechazó.
+
+Esta regla la aplica la app según el gafete con el que se entra, igual que los demás roles.
 
 ## Ajustes al programa de surtido
 
