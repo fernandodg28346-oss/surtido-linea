@@ -288,9 +288,10 @@ const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 /* ===================== Estado ===================== */
 const S={gafetes:{},bom:{},plan:{},surtidos:{},eventos:{},config:{},
   me:null, view:null, sel:{fecha:today(),turno:"",linea:"",bom:null,bomDel:new Set()}, ready:false};
-const DEFAULT_CFG={pct:20, tolerancia:10, anticipacion:1, turnos:{T1:{inicio:"06:00",fin:"14:00"},T2:{inicio:"14:00",fin:"22:00"},T3:{inicio:"22:00",fin:"06:00"}}};
+const DEFAULT_CFG={pct:20, tolerancia:10, anticipacionHoras:24, turnos:{T1:{inicio:"06:00",fin:"14:00"},T2:{inicio:"14:00",fin:"22:00"},T3:{inicio:"22:00",fin:"06:00"}}};
 function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.pct)||20), tolerancia:Number(c.tolerancia)||DEFAULT_CFG.tolerancia,
-  anticipacion:c.anticipacion==null?DEFAULT_CFG.anticipacion:Math.max(0,Math.floor(Number(c.anticipacion))||0), turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
+  // Horas antes del inicio del turno del plan. Si solo existe el ajuste anterior en días, se convierte.
+  anticipacion:c.anticipacionHoras!=null?Math.max(0,Number(c.anticipacionHoras)||0):c.anticipacion!=null?Math.max(0,Number(c.anticipacion)||0)*24:DEFAULT_CFG.anticipacionHoras, turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
 
 const ROLES={
   admin:{label:"Administrador",tabs:["lineas","surtido","plan","bom","metricas","gafetes"]},
@@ -315,7 +316,7 @@ const can={
   editPlan:()=>["admin","planeador","gerente"].includes(S.me?.rol),
   // Aprueba altas, cambios y bajas del plan dentro del plazo de anticipación; sus propios cambios no requieren aprobación.
   approve:()=>["admin","gerente"].includes(S.me?.rol),
-  confirm:()=>["admin","materialista"].includes(S.me?.rol),
+  confirm:()=>["admin","materialista","lider"].includes(S.me?.rol),
   // Paros de línea, reconteos y arranque de ensambles.
   ops:()=>["admin","planeador","materialista","lider"].includes(S.me?.rol),
   admin:()=>S.me?.rol==="admin"
@@ -530,13 +531,16 @@ function renderLogin(app){
 const ffv=id=>document.getElementById(id).value.trim();
 
 /* ===================== Plan de producción =====================
-   Un plan se postea con cfg().anticipacion días de anticipación. Altas, cambios y bajas de fechas dentro de ese plazo
-   (o ya pasadas) quedan pendientes hasta que Gerencia o el administrador las aprueba: mientras tanto el plan vigente
+   Un plan se postea cfg().anticipacion horas antes del inicio de su turno. Altas, cambios y bajas de planes que arrancan
+   dentro de ese plazo (o ya arrancaron) quedan pendientes hasta que Gerencia o el administrador las aprueba: mientras tanto el plan vigente
    no cambia y un alta pendiente no genera surtidos. */
 const PLAN_CAMPOS={cantidad:"Cantidad",uph:"UPH",turno:"Turno",linea:"Línea"};
 const PEND_LABEL={alta:"Alta",cambio:"Cambio",baja:"Baja"};
-function daysAhead(fecha){ return Math.round((new Date(fecha+"T00:00:00")-new Date(today()+"T00:00:00"))/86400000); }
-function needsApproval(fecha){ return !can.approve() && daysAhead(fecha)<cfg().anticipacion; }
+function hoursAhead(p){ return (shiftStart(p.fecha,p.turno).getTime()-Date.now())/3600000; }
+// Requiere aprobación si alguno de los planes (p. ej. el actual y el editado) inicia dentro del plazo.
+function needsApproval(...plans){ return !can.approve() && plans.some(p=>hoursAhead(p)<cfg().anticipacion); }
+const fmtHoras=h=>fmtN(h,1)+" h";
+const fmtFechaHora=d=>d.toLocaleString("es-MX",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
 function activePlans(){ return Object.values(S.plan).filter(p=>p.pendiente?.tipo!=="alta"); }
 function histEntry(accion,extra){ return Object.assign({accion,ts:Date.now(),por:S.me.gafete,porNombre:S.me.nombre},extra||{}); }
 function solicitud(tipo,extra){ return Object.assign({tipo,ts:Date.now(),por:S.me.gafete,porNombre:S.me.nombre},extra||{}); }
@@ -559,12 +563,11 @@ function viewPlan(app){
   const rows=Object.values(S.plan).sort((a,b)=>(b.fecha+a.turno+a.linea).localeCompare(a.fecha+b.turno+b.linea));
   const pend=rows.filter(p=>p.pendiente).sort((a,b)=>a.pendiente.ts-b.pendiente.ts);
   const ens=Object.values(S.bom).map(b=>b.ensamble).sort();
-  const libre=new Date(today()+"T00:00:00"); libre.setDate(libre.getDate()+c.anticipacion);
-  const libreTxt=libre.toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});
+  const libreTxt=fmtFechaHora(new Date(Date.now()+c.anticipacion*3600000));
   app.innerHTML=`
   <div class="view-head"><div><h2>Plan de producción</h2><p>Qué ensamble corre, cuántas piezas, a qué UPH, en qué turno y en qué línea. Con el UPH se calcula el consumo por hora de cada NP del BOM (UPH × cantidad por unidad).</p></div>
   ${ed?`<div class="row"><button class="btn" id="tpl-plan">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-plan" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
-  ${ed&&c.anticipacion>0?`<div class="note" style="margin-bottom:16px">El plan se postea con <b>${c.anticipacion} día${c.anticipacion>1?"s":""}</b> de anticipación: desde el <b>${esc(libreTxt)}</b> en adelante se agrega o cambia sin aprobación. ${ap?"Como Gerencia, tus altas, cambios y bajas se aplican directo.":"Altas, cambios o bajas para fechas anteriores se envían a <b>aprobación de Gerencia</b> y no cuentan en el surtido hasta aprobarse."}</div>`:""}
+  ${ed&&c.anticipacion>0?`<div class="note" style="margin-bottom:16px">El plan se postea con <b>${fmtHoras(c.anticipacion)}</b> de anticipación al inicio del turno: ahora entran sin aprobación los turnos que inician del <b>${esc(libreTxt)}</b> en adelante. ${ap?"Como Gerencia, tus altas, cambios y bajas se aplican directo.":"Altas, cambios o bajas de turnos que inician antes se envían a <b>aprobación de Gerencia</b> y no cuentan en el surtido hasta aprobarse."}</div>`:""}
   ${pend.length&&(ed||ap)?`<div class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="ph"><h3>Pendientes de aprobación de Gerencia</h3><span class="pill p-warn">${pend.length}</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Solicitud</th><th>Plan</th><th>Detalle</th><th>Solicitó</th><th></th></tr></thead>
     <tbody>${pend.map(p=>`<tr><td><span class="pill p-warn">${PEND_LABEL[p.pendiente.tipo]}</span></td>
@@ -608,15 +611,15 @@ function viewPlan(app){
   document.getElementById("f-plan").onsubmit=async e=>{e.preventDefault();
     const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:ffv("p-arr"),creado:Date.now(),por:S.me.gafete};
     if(!planUph(p)) return toast(`Captura el UPH de ${p.ensamble}: con él se calcula el consumo de cada NP.`);
-    const req=needsApproval(p.fecha);
+    const req=needsApproval(p);
     if(req) p.pendiente=solicitud("alta");
     p.historial=[histEntry(req?"solicitó alta":"alta")];
     S.sel.fecha=p.fecha;
-    if(await safeWrite(()=>Store.set("plan",newId(),p))) toast(req?`Enviado a aprobación de Gerencia: ${p.ensamble} en ${p.linea} (menos de ${c.anticipacion} día${c.anticipacion>1?"s":""} de anticipación).`:"Agregado: "+p.ensamble+" en "+p.linea);
+    if(await safeWrite(()=>Store.set("plan",newId(),p))) toast(req?`Enviado a aprobación de Gerencia: ${p.ensamble} en ${p.linea} (menos de ${fmtHoras(c.anticipacion)} antes del inicio del turno).`:"Agregado: "+p.ensamble+" en "+p.linea);
   };
   app.querySelectorAll("[data-del-plan]").forEach(b=>b.onclick=()=>{
     const p=S.plan[b.dataset.delPlan];
-    if(needsApproval(p.fecha)) confirmBox(`${p.ensamble} del ${p.fecha} está dentro del plazo de anticipación. ¿Solicitar a Gerencia quitarlo del plan?`,"Solicitar baja",
+    if(needsApproval(p)) confirmBox(`${p.ensamble} del ${p.fecha} (${p.turno}) inicia en menos de ${fmtHoras(cfg().anticipacion)}. ¿Solicitar a Gerencia quitarlo del plan?`,"Solicitar baja",
       async()=>{ if(await safeWrite(()=>Store.set("plan",p._id,Object.assign({},p,{pendiente:solicitud("baja")})))) toast("Baja enviada a aprobación de Gerencia."); });
     else confirmBox("¿Quitar esta fila del plan?","Quitar",()=>safeWrite(()=>Store.del("plan",p._id)));
   });
@@ -629,7 +632,7 @@ function viewPlan(app){
       const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:/manual/i.test(String(g(["arranque","inicio","start"])||""))?"manual":"turno",creado:Date.now(),por:S.me.gafete};
       if(/^\d$/.test(p.turno)) p.turno="T"+p.turno;
       if(!p.fecha||!p.ensamble||!(p.cantidad>0)||!p.turno||!p.linea){bad++;continue;}
-      const req=needsApproval(p.fecha); if(req){ p.pendiente=solicitud("alta"); nPend++; }
+      const req=needsApproval(p); if(req){ p.pendiente=solicitud("alta"); nPend++; }
       p.historial=[histEntry(req?"solicitó alta":"alta",{origen:"Excel"})];
       await Store.set("plan",newId(),p); n++; if(!planUph(p)) sinUph++;
     }
@@ -637,11 +640,11 @@ function viewPlan(app){
   });
 }
 function openPlanEdit(p){
-  const root=document.getElementById("modal-root"), c=cfg(), req=needsApproval(p.fecha);
+  const root=document.getElementById("modal-root"), c=cfg(), req=needsApproval(p);
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="pe-t">
     <div class="ph"><h3 id="pe-t">Editar plan</h3><button class="btn ghost" id="pe-x">Cancelar</button></div>
     <form class="pb" id="f-pe">
-      <div class="note"><b class="mono">${esc(p.ensamble)}</b> · ${esc(p.fecha)}${req?`<br>Está dentro del plazo de ${c.anticipacion} día${c.anticipacion>1?"s":""}: el cambio se envía a <b>aprobación de Gerencia</b> y el plan vigente no cambia hasta aprobarse.`:""}</div>
+      <div class="note"><b class="mono">${esc(p.ensamble)}</b> · ${esc(p.fecha)}${req?`<br>Inicia en menos de ${fmtHoras(c.anticipacion)}: el cambio se envía a <b>aprobación de Gerencia</b> y el plan vigente no cambia hasta aprobarse.`:""}</div>
       <div class="row">
         <div class="fld"><label for="pe-cant">Cantidad</label><input id="pe-cant" type="number" min="1" class="w-s" value="${esc(p.cantidad)}" required></div>
         <div class="fld"><label for="pe-uph">UPH</label><input id="pe-uph" type="number" min="1" class="w-xs" value="${esc(p.uph||"")}" placeholder="${S.bom[safeId(p.ensamble)]?.uph?"BOM":""}"></div>
@@ -658,6 +661,7 @@ function openPlanEdit(p){
     const cambios={}; Object.keys(nv).forEach(k=>{ if((p[k]??null)!==nv[k]) cambios[k]=nv[k]; });
     if(!Object.keys(cambios).length) return close();
     if(!planUph(Object.assign({},p,nv))) return document.getElementById("pe-err").textContent=`Captura el UPH de ${p.ensamble}.`;
+    const req=needsApproval(p,Object.assign({},p,nv));
     const next=req?Object.assign({},p,{pendiente:solicitud("cambio",{cambios})})
       :Object.assign({},p,cambios,{historial:[...(p.historial||[]),histEntry("cambio",{cambios})]});
     if(await safeWrite(()=>Store.set("plan",p._id,next))){ close(); toast(req?"Cambio enviado a aprobación de Gerencia.":"Plan actualizado."); }
@@ -1091,7 +1095,7 @@ function viewGafetes(app){
       <div class="panel"><div class="ph"><h3>Parámetros de surtido</h3></div><div class="pb"><form id="f-cfg" class="stack">
         <div class="row"><div class="fld"><label for="c-pct">Punto de reorden %</label><input id="c-pct" type="number" min="20" max="90" value="${c.pct}" class="w-xs"></div>
         <div class="fld"><label for="c-tol">Tolerancia min</label><input id="c-tol" type="number" min="0" value="${c.tolerancia}" class="w-xs"></div>
-        <div class="fld"><label for="c-ant">Anticipación del plan (días)</label><input id="c-ant" type="number" min="0" step="1" value="${c.anticipacion}" class="w-xs" title="Altas, cambios o bajas del plan con menos anticipación requieren aprobación de Gerencia. 0 = no se requiere aprobación."></div></div>
+        <div class="fld"><label for="c-ant">Anticipación del plan (horas)</label><input id="c-ant" type="number" min="0" step="0.5" value="${c.anticipacion}" class="w-xs" title="Horas antes del inicio del turno. Altas, cambios o bajas con menos anticipación requieren aprobación de Gerencia. 0 = no se requiere aprobación."></div></div>
         ${Object.entries(c.turnos).map(([t,v])=>`<div class="row"><div class="fld"><label>${t}</label><span class="mono">Turno</span></div>
           <div class="fld"><label for="c-${t}-i">Inicio</label><input type="time" id="c-${t}-i" value="${v.inicio}"></div>
           <div class="fld"><label for="c-${t}-f">Fin</label><input type="time" id="c-${t}-f" value="${v.fin}"></div></div>`).join("")}
@@ -1126,7 +1130,7 @@ function viewGafetes(app){
   document.getElementById("f-cfg").onsubmit=async e=>{e.preventDefault();
     const turnos={}; Object.keys(c.turnos).forEach(t=>turnos[t]={inicio:ffv(`c-${t}-i`),fin:ffv(`c-${t}-f`)});
     const pct=Math.max(20,Number(ffv("c-pct"))||20);
-    if(await safeWrite(()=>Store.set("config","general",{pct,tolerancia:Number(ffv("c-tol"))||0,anticipacion:Math.max(0,Math.floor(Number(ffv("c-ant")))||0),turnos}))) toast("Parámetros guardados");};
+    if(await safeWrite(()=>Store.set("config","general",{pct,tolerancia:Number(ffv("c-tol"))||0,anticipacionHoras:Math.max(0,Number(ffv("c-ant"))||0),turnos}))) toast("Parámetros guardados");};
   app.querySelectorAll("[data-rol]").forEach(s=>s.onchange=()=>{const u=S.gafetes[s.dataset.rol]; safeWrite(()=>Store.set("gafetes",u._id,Object.assign({},u,{rol:s.value})));});
   app.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=()=>{const u=S.gafetes[b.dataset.delUser]; confirmBox(`¿Dar de baja a ${u.nombre}?`,"Dar de baja",()=>safeWrite(()=>Store.del("gafetes",u._id)));});
 }
