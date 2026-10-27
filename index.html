@@ -11,7 +11,6 @@
 <script src="config.js"></script>
 <style>
 html{-webkit-text-size-adjust:100%} body{margin:0} [hidden]{display:none!important} img{max-width:100%}
-:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 /* Layout: barra de planta fija arriba, pestañas por rol, área de trabajo en tarjetas por estación (tablero andon). */
 :root{
   --bg:#eef1f4; --panel:#ffffff; --panel-2:#f6f8fa; --line:#d5dbe2; --ink:#16202b; --ink-2:#4d5b6a; --ink-3:#7a8796;
@@ -42,20 +41,33 @@ h2{font-size:26px}h3{font-size:19px}
 .muted{color:var(--ink-2)} .small{font-size:12px}
 .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:600}
 
-/* barra superior */
-.top{background:var(--bar);color:var(--bar-ink);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
-.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:10px}
-.brand{display:flex;align-items:baseline;gap:10px}
-.brand h1{font-size:24px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-.brand .tag{font-family:var(--f-mono);font-size:11px;opacity:.6}
-nav.tabs{display:flex;gap:2px;flex-wrap:wrap;flex:1}
-nav.tabs button{background:transparent;color:var(--bar-ink);border:0;border-bottom:3px solid transparent;padding:8px 12px;font:600 15px var(--f-display);text-transform:uppercase;letter-spacing:.06em;cursor:pointer;opacity:.7}
-nav.tabs button[aria-current="page"]{opacity:1;border-bottom-color:var(--warn)}
-nav.tabs button:hover{opacity:1}
-.who{display:flex;align-items:center;gap:10px;font-size:13px}
-.who .role{font-family:var(--f-mono);font-size:11px;padding:2px 6px;border:1px solid currentColor;border-radius:3px;opacity:.8}
-.who button{background:transparent;color:var(--bar-ink);border:1px solid #ffffff40;border-radius:4px;padding:4px 10px;cursor:pointer}
+/* barra lateral: marca, menú por rol y usuario; en pantallas angostas pasa arriba */
+.shell{display:flex;align-items:flex-start;min-height:100vh}
+.side{background:var(--bar);color:var(--bar-ink);position:sticky;top:0;flex:0 0 232px;height:100vh;height:100dvh;display:flex;flex-direction:column;gap:18px;padding:calc(18px + env(safe-area-inset-top,0px)) 0 calc(16px + env(safe-area-inset-bottom,0px)) max(0px,env(safe-area-inset-left,0px));overflow-y:auto;z-index:20}
+.brand{display:grid;gap:4px;padding:0 18px}
+.brand h1{font-size:24px;line-height:1.05;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.brand .tag{font-family:var(--f-mono);font-size:11px;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav.tabs{display:flex;flex-direction:column;gap:2px;flex:1}
+nav.tabs button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;color:var(--bar-ink);border:0;border-left:4px solid transparent;padding:10px 18px 10px 14px;font:600 16px var(--f-display);text-transform:uppercase;letter-spacing:.06em;cursor:pointer;opacity:.7}
+nav.tabs button svg{width:18px;height:18px;flex:0 0 18px}
+nav.tabs button[aria-current="page"]{opacity:1;border-left-color:var(--warn);background:#ffffff12}
+nav.tabs button:hover{opacity:1;background:#ffffff0a}
+.who{display:grid;gap:6px;padding:14px 18px 0;border-top:1px solid #ffffff1f;font-size:13px}
+.who .role{justify-self:start;font-family:var(--f-mono);font-size:11px;padding:2px 6px;border:1px solid currentColor;border-radius:3px;opacity:.8}
+.who button{justify-self:start;background:transparent;color:var(--bar-ink);border:1px solid #ffffff40;border-radius:4px;padding:4px 12px;cursor:pointer}
 .conn{font-family:var(--f-mono);font-size:11px;opacity:.6}
+.shell>main{flex:1;min-width:0}
+@media (max-width:800px){
+  .shell{display:block}
+  .side{height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));overflow:visible}
+  .brand{padding:0;flex:1;min-width:0}
+  .brand h1{font-size:20px}
+  .who{display:flex;align-items:center;gap:8px;padding:0;border:0}
+  nav.tabs{order:3;flex:1 0 100%;flex-direction:row;overflow-x:auto;scrollbar-width:none}
+  nav.tabs button{width:auto;flex:0 0 auto;border-left:0;border-bottom:3px solid transparent;padding:8px 10px;font-size:15px}
+  nav.tabs button svg{display:none}
+  nav.tabs button[aria-current="page"]{border-bottom-color:var(--warn);background:transparent}
+}
 
 main{padding-block:20px 60px}
 .view-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
@@ -190,14 +202,14 @@ td.num,th.num{text-align:right}
 </head>
 <body>
 
-<header class="top" id="top" hidden>
-  <div class="wrap">
-    <div class="brand"><h1>Surtido de Línea</h1><span class="tag" id="conn"></span></div>
-    <nav class="tabs" id="tabs"></nav>
-    <div class="who" id="who"></div>
-  </div>
-</header>
+<div class="shell">
+<aside class="side" id="top" hidden>
+  <div class="brand"><h1>Surtido de Línea</h1><span class="tag" id="conn"></span></div>
+  <nav class="tabs" id="tabs" aria-label="Menú"></nav>
+  <div class="who" id="who"></div>
+</aside>
 <main class="wrap" id="app"><div class="empty">Cargando…</div></main>
+</div>
 <div id="modal-root"></div>
 
 <script>
@@ -266,6 +278,15 @@ const ROLES={
   lider:{label:"Líder de línea",tabs:["lineas","surtido","metricas"]},
   supervisor:{label:"Supervisor",tabs:["lineas","metricas","surtido","plan"]},
   receptor:{label:"Recibe material (sin acceso)",tabs:[]}
+};
+// Íconos del menú lateral (trazo, heredan el color del texto).
+const TAB_ICON={
+  lineas:'<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
+  surtido:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
+  plan:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  bom:'<path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="18" r="1.2"/>',
+  metricas:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  gafetes:'<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M8 17c1-2 2.5-3 4-3s3 1 4 3"/>'
 };
 const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",gafetes:"Gafetes y ajustes"};
 const can={
@@ -432,7 +453,7 @@ function render(soft){
   const active=document.activeElement; if(soft && active && active.matches("input,select") && app.contains(active)) return;
   top.hidden=false;
   const tabs=ROLES[S.me.rol].tabs; if(!tabs.includes(S.view)) S.view=tabs[0];
-  document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""}>${TAB_LABEL[t]}</button>`).join("");
+  document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICON[t]}</svg>${TAB_LABEL[t]}</button>`).join("");
   document.getElementById("who").innerHTML=`<span>${esc(S.me.nombre)}</span><span class="role">${esc(ROLES[S.me.rol].label)}</span><button id="logout">Salir</button>`;
   document.getElementById("conn").textContent="● "+Store.equipo;
   ({lineas:viewLineas,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,gafetes:viewGafetes})[S.view](app);
