@@ -54,6 +54,8 @@ h2{font-size:26px}h3{font-size:19px}
 nav.tabs{display:flex;flex-direction:column;gap:2px;flex:1}
 nav.tabs button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;color:var(--bar-ink);border:0;border-left:4px solid transparent;padding:10px 18px 10px 14px;font:600 16px var(--f-display);text-transform:uppercase;letter-spacing:.06em;cursor:pointer;opacity:.7}
 nav.tabs button svg{width:18px;height:18px;flex:0 0 18px}
+nav.tabs button{position:relative}
+.tab-n{margin-left:auto;font:600 11px var(--f-mono);background:var(--warn);color:#1a1200;border-radius:999px;padding:1px 7px;letter-spacing:0}
 nav.tabs button[aria-current="page"]{opacity:1;border-left-color:var(--warn);background:#ffffff12}
 nav.tabs button:hover{opacity:1;background:#ffffff0a}
 .who{display:grid;gap:6px;padding:14px 18px 0;border-top:1px solid #ffffff1f;font-size:13px}
@@ -66,6 +68,7 @@ nav.tabs button:hover{opacity:1;background:#ffffff0a}
   .shell.collapsed .brand{padding:0;justify-content:center}
   .shell.collapsed .brand-t,.shell.collapsed nav.tabs .t,.shell.collapsed .who .nm,.shell.collapsed .who .role,.shell.collapsed .who .t{display:none}
   .shell.collapsed .side-toggle svg{transform:rotate(180deg)}
+  .shell.collapsed .tab-n{position:absolute;top:4px;right:8px;padding:0 5px;font-size:10px}
   .shell.collapsed nav.tabs button{justify-content:center;padding:12px 4px 12px 0}
   .shell.collapsed .who{padding:14px 0 0;justify-items:center}
   .shell.collapsed .who button{justify-self:center;padding:6px 8px}
@@ -285,14 +288,16 @@ const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 /* ===================== Estado ===================== */
 const S={gafetes:{},bom:{},plan:{},surtidos:{},eventos:{},config:{},
   me:null, view:null, sel:{fecha:today(),turno:"",linea:"",bom:null,bomDel:new Set()}, ready:false};
-const DEFAULT_CFG={pct:20, tolerancia:10, turnos:{T1:{inicio:"06:00",fin:"14:00"},T2:{inicio:"14:00",fin:"22:00"},T3:{inicio:"22:00",fin:"06:00"}}};
-function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.pct)||20), tolerancia:Number(c.tolerancia)||DEFAULT_CFG.tolerancia, turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
+const DEFAULT_CFG={pct:20, tolerancia:10, anticipacion:1, turnos:{T1:{inicio:"06:00",fin:"14:00"},T2:{inicio:"14:00",fin:"22:00"},T3:{inicio:"22:00",fin:"06:00"}}};
+function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.pct)||20), tolerancia:Number(c.tolerancia)||DEFAULT_CFG.tolerancia,
+  anticipacion:c.anticipacion==null?DEFAULT_CFG.anticipacion:Math.max(0,Math.floor(Number(c.anticipacion))||0), turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
 
 const ROLES={
   admin:{label:"Administrador",tabs:["lineas","surtido","plan","bom","metricas","gafetes"]},
   planeador:{label:"Planeador",tabs:["plan","bom","lineas","surtido","metricas"]},
   materialista:{label:"Materialista",tabs:["lineas","surtido"]},
   lider:{label:"Líder de línea",tabs:["lineas","surtido","metricas"]},
+  gerente:{label:"Gerencia",tabs:["plan","lineas","surtido","metricas"]},
   supervisor:{label:"Supervisor",tabs:["lineas","metricas","surtido","plan"]},
   receptor:{label:"Recibe material (sin acceso)",tabs:[]}
 };
@@ -307,7 +312,9 @@ const TAB_ICON={
 };
 const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",gafetes:"Gafetes y ajustes"};
 const can={
-  editPlan:()=>["admin","planeador"].includes(S.me?.rol),
+  editPlan:()=>["admin","planeador","gerente"].includes(S.me?.rol),
+  // Aprueba altas, cambios y bajas del plan dentro del plazo de anticipación; sus propios cambios no requieren aprobación.
+  approve:()=>["admin","gerente"].includes(S.me?.rol),
   confirm:()=>["admin","materialista"].includes(S.me?.rol),
   // Paros de línea, reconteos y arranque de ensambles.
   ops:()=>["admin","planeador","materialista","lider"].includes(S.me?.rol),
@@ -470,7 +477,8 @@ function render(soft){
   const active=document.activeElement; if(soft && active && active.matches("input,select") && app.contains(active)) return;
   top.hidden=false;
   const tabs=ROLES[S.me.rol].tabs; if(!tabs.includes(S.view)) S.view=tabs[0];
-  document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""} title="${TAB_LABEL[t]}" aria-label="${TAB_LABEL[t]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICON[t]}</svg><span class="t">${TAB_LABEL[t]}</span></button>`).join("");
+  const nPend=Object.values(S.plan).filter(p=>p.pendiente).length;
+  document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""} title="${TAB_LABEL[t]}" aria-label="${TAB_LABEL[t]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICON[t]}</svg><span class="t">${TAB_LABEL[t]}</span>${t==="plan"&&can.approve()&&nPend?`<span class="tab-n" title="${nPend} pendiente(s) de aprobación">${nPend}</span>`:""}</button>`).join("");
   document.getElementById("who").innerHTML=`<span class="nm">${esc(S.me.nombre)}</span><span class="role">${esc(ROLES[S.me.rol].label)}</span><button id="logout" title="Salir (${esc(S.me.nombre)})" aria-label="Salir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span class="t">Salir</span></button>`;
   document.getElementById("conn").textContent="● "+Store.equipo;
   ({lineas:viewLineas,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,gafetes:viewGafetes})[S.view](app);
@@ -521,14 +529,50 @@ function renderLogin(app){
 }
 const ffv=id=>document.getElementById(id).value.trim();
 
-/* ===================== Plan de producción ===================== */
+/* ===================== Plan de producción =====================
+   Un plan se postea con cfg().anticipacion días de anticipación. Altas, cambios y bajas de fechas dentro de ese plazo
+   (o ya pasadas) quedan pendientes hasta que Gerencia o el administrador las aprueba: mientras tanto el plan vigente
+   no cambia y un alta pendiente no genera surtidos. */
+const PLAN_CAMPOS={cantidad:"Cantidad",uph:"UPH",turno:"Turno",linea:"Línea"};
+const PEND_LABEL={alta:"Alta",cambio:"Cambio",baja:"Baja"};
+function daysAhead(fecha){ return Math.round((new Date(fecha+"T00:00:00")-new Date(today()+"T00:00:00"))/86400000); }
+function needsApproval(fecha){ return !can.approve() && daysAhead(fecha)<cfg().anticipacion; }
+function activePlans(){ return Object.values(S.plan).filter(p=>p.pendiente?.tipo!=="alta"); }
+function histEntry(accion,extra){ return Object.assign({accion,ts:Date.now(),por:S.me.gafete,porNombre:S.me.nombre},extra||{}); }
+function solicitud(tipo,extra){ return Object.assign({tipo,ts:Date.now(),por:S.me.gafete,porNombre:S.me.nombre},extra||{}); }
+function withoutPend(p,accion){ const n=Object.assign({},p,{historial:[...(p.historial||[]),histEntry(accion,{solicito:p.pendiente?.porNombre||""})]}); delete n.pendiente; return n; }
+function pendDetail(p){
+  const q=p.pendiente;
+  if(q.tipo==="alta") return `Agregar ${fmtN(p.cantidad)} pzs${planUph(p)?` a ${fmtN(planUph(p))} UPH`:""}`;
+  if(q.tipo==="baja") return "Quitar del plan";
+  return Object.entries(q.cambios||{}).map(([k,v])=>`${PLAN_CAMPOS[k]||k}: <span class="mono">${esc(p[k]??"—")}</span> → <b class="mono">${esc(v??"—")}</b>`).join("<br>");
+}
+async function resolvePlan(p,ok){
+  const q=p.pendiente; if(!q) return;
+  const accion=(ok?"aprobó ":"rechazó ")+q.tipo;
+  if(q.tipo==="alta") return ok?Store.set("plan",p._id,withoutPend(p,accion)):Store.del("plan",p._id);
+  if(q.tipo==="baja") return ok?Store.del("plan",p._id):Store.set("plan",p._id,withoutPend(p,accion));
+  return Store.set("plan",p._id,Object.assign(withoutPend(p,accion),ok?q.cambios:{}));
+}
 function viewPlan(app){
-  const ed=can.editPlan(), c=cfg();
+  const ed=can.editPlan(), ap=can.approve(), c=cfg();
   const rows=Object.values(S.plan).sort((a,b)=>(b.fecha+a.turno+a.linea).localeCompare(a.fecha+b.turno+b.linea));
+  const pend=rows.filter(p=>p.pendiente).sort((a,b)=>a.pendiente.ts-b.pendiente.ts);
   const ens=Object.values(S.bom).map(b=>b.ensamble).sort();
+  const libre=new Date(today()+"T00:00:00"); libre.setDate(libre.getDate()+c.anticipacion);
+  const libreTxt=libre.toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long"});
   app.innerHTML=`
   <div class="view-head"><div><h2>Plan de producción</h2><p>Qué ensamble corre, cuántas piezas, a qué UPH, en qué turno y en qué línea. Con el UPH se calcula el consumo por hora de cada NP del BOM (UPH × cantidad por unidad).</p></div>
   ${ed?`<div class="row"><button class="btn" id="tpl-plan">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-plan" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
+  ${ed&&c.anticipacion>0?`<div class="note" style="margin-bottom:16px">El plan se postea con <b>${c.anticipacion} día${c.anticipacion>1?"s":""}</b> de anticipación: desde el <b>${esc(libreTxt)}</b> en adelante se agrega o cambia sin aprobación. ${ap?"Como Gerencia, tus altas, cambios y bajas se aplican directo.":"Altas, cambios o bajas para fechas anteriores se envían a <b>aprobación de Gerencia</b> y no cuentan en el surtido hasta aprobarse."}</div>`:""}
+  ${pend.length&&(ed||ap)?`<div class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="ph"><h3>Pendientes de aprobación de Gerencia</h3><span class="pill p-warn">${pend.length}</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Solicitud</th><th>Plan</th><th>Detalle</th><th>Solicitó</th><th></th></tr></thead>
+    <tbody>${pend.map(p=>`<tr><td><span class="pill p-warn">${PEND_LABEL[p.pendiente.tipo]}</span></td>
+      <td><span class="mono">${esc(p.fecha)}</span> · ${esc(p.turno)} · <b>${esc(p.linea)}</b> · <span class="mono">${esc(p.ensamble)}</span></td>
+      <td class="small">${pendDetail(p)}</td>
+      <td>${esc(p.pendiente.porNombre||"")}<div class="small muted">${new Date(p.pendiente.ts).toLocaleString("es-MX",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></td>
+      <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${ap?`<button class="btn ok" data-aprobar="${p._id}">Aprobar</button><button class="btn" data-rechazar="${p._id}">Rechazar</button>`
+        :`<button class="btn ghost" data-cancelar="${p._id}">Cancelar solicitud</button>`}</div></td></tr>`).join("")}</tbody></table></div></div>`:""}
   ${ed?`<div class="panel" style="margin-bottom:16px"><div class="pb">
     <form id="f-plan" class="row">
       <div class="fld"><label for="p-fecha">Fecha</label><input type="date" id="p-fecha" value="${S.sel.fecha}" required></div>
@@ -542,32 +586,82 @@ function viewPlan(app){
     </form></div></div>`:""}
   <div class="panel"><div class="tbl-wrap"><table>
     <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th><th>Arranque</th>${ed?"<th></th>":""}</tr></thead>
-    <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr>
-      <td class="mono">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}</td>
+    <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr${p.pendiente?.tipo==="alta"?' style="opacity:.6"':""}>
+      <td class="mono" style="white-space:nowrap">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}${p.pendiente?`<div><span class="pill p-warn" title="Pendiente de aprobación de Gerencia">${PEND_LABEL[p.pendiente.tipo]} pendiente</span></div>`:""}</td>
       <td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
       <td>${hasB?'<span class="pill p-ok">Cargado</span>':'<span class="pill p-bad">Falta BOM</span>'}</td>
       <td>${startLabel(p)}</td>
-      ${ed?`<td><button class="btn danger" data-del-plan="${p._id}">Quitar</button></td>`:""}</tr>`}).join(""):`<tr><td colspan="10" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
+      ${ed?`<td><div class="row" style="flex-wrap:nowrap">${p.pendiente?'<span class="small muted">En aprobación</span>':`<button class="btn ghost" data-edit-plan="${p._id}">Editar</button><button class="btn danger" data-del-plan="${p._id}">Quitar</button>`}</div></td>`:""}</tr>`}).join(""):`<tr><td colspan="10" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
   </table></div></div>`;
+  app.querySelectorAll("[data-aprobar],[data-rechazar]").forEach(b=>b.onclick=()=>{
+    const ok=!!b.dataset.aprobar, p=S.plan[b.dataset.aprobar||b.dataset.rechazar]; if(!p?.pendiente) return;
+    const t=p.pendiente.tipo, que=`${PEND_LABEL[t].toLowerCase()} de ${p.ensamble} (${p.fecha}, ${p.linea})`;
+    confirmBox(ok?`¿Aprobar ${que}?${t==="baja"?" La fila se quitará del plan.":t==="cambio"?" El cambio se aplica al plan vigente.":" Empezará a generar surtidos."}`:`¿Rechazar ${que}?${t==="alta"?" La fila se descarta.":" El plan vigente se queda como está."}`,
+      ok?"Aprobar":"Rechazar",async()=>{ if(await safeWrite(()=>resolvePlan(p,ok))) toast(`${ok?"Aprobado":"Rechazado"}: ${que}.`); });
+  });
   if(!ed) return;
+  app.querySelectorAll("[data-cancelar]").forEach(b=>b.onclick=()=>{
+    const p=S.plan[b.dataset.cancelar]; if(!p?.pendiente) return;
+    confirmBox(`¿Cancelar la solicitud de ${PEND_LABEL[p.pendiente.tipo].toLowerCase()} de ${p.ensamble}?`,"Cancelar solicitud",
+      ()=>safeWrite(()=>p.pendiente.tipo==="alta"?Store.del("plan",p._id):Store.set("plan",p._id,withoutPend(p,"canceló "+p.pendiente.tipo))));
+  });
   document.getElementById("f-plan").onsubmit=async e=>{e.preventDefault();
     const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:ffv("p-arr"),creado:Date.now(),por:S.me.gafete};
     if(!planUph(p)) return toast(`Captura el UPH de ${p.ensamble}: con él se calcula el consumo de cada NP.`);
-    S.sel.fecha=p.fecha; await safeWrite(()=>Store.set("plan",newId(),p)); toast("Agregado: "+p.ensamble+" en "+p.linea);
+    const req=needsApproval(p.fecha);
+    if(req) p.pendiente=solicitud("alta");
+    p.historial=[histEntry(req?"solicitó alta":"alta")];
+    S.sel.fecha=p.fecha;
+    if(await safeWrite(()=>Store.set("plan",newId(),p))) toast(req?`Enviado a aprobación de Gerencia: ${p.ensamble} en ${p.linea} (menos de ${c.anticipacion} día${c.anticipacion>1?"s":""} de anticipación).`:"Agregado: "+p.ensamble+" en "+p.linea);
   };
-  app.querySelectorAll("[data-del-plan]").forEach(b=>b.onclick=()=>confirmBox("¿Quitar esta fila del plan?","Quitar",()=>safeWrite(()=>Store.del("plan",b.dataset.delPlan))));
+  app.querySelectorAll("[data-del-plan]").forEach(b=>b.onclick=()=>{
+    const p=S.plan[b.dataset.delPlan];
+    if(needsApproval(p.fecha)) confirmBox(`${p.ensamble} del ${p.fecha} está dentro del plazo de anticipación. ¿Solicitar a Gerencia quitarlo del plan?`,"Solicitar baja",
+      async()=>{ if(await safeWrite(()=>Store.set("plan",p._id,Object.assign({},p,{pendiente:solicitud("baja")})))) toast("Baja enviada a aprobación de Gerencia."); });
+    else confirmBox("¿Quitar esta fila del plan?","Quitar",()=>safeWrite(()=>Store.del("plan",p._id)));
+  });
+  app.querySelectorAll("[data-edit-plan]").forEach(b=>b.onclick=()=>openPlanEdit(S.plan[b.dataset.editPlan]));
   document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","Cantidad","Turno","Linea","UPH","Arranque"],[today(),"ENS-1001",480,"T1","L1",60,"turno"],[today(),"ENS-2002",200,"T1","L2",40,"manual"]]);
   document.getElementById("xl-plan").onchange=e=>readXlsx(e.target.files[0],async rows=>{
-    let n=0, bad=0, sinUph=0;
+    let n=0, bad=0, sinUph=0, nPend=0;
     for(const r of rows){
       const g=k=>pick(r,k);
       const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:/manual/i.test(String(g(["arranque","inicio","start"])||""))?"manual":"turno",creado:Date.now(),por:S.me.gafete};
       if(/^\d$/.test(p.turno)) p.turno="T"+p.turno;
       if(!p.fecha||!p.ensamble||!(p.cantidad>0)||!p.turno||!p.linea){bad++;continue;}
+      const req=needsApproval(p.fecha); if(req){ p.pendiente=solicitud("alta"); nPend++; }
+      p.historial=[histEntry(req?"solicitó alta":"alta",{origen:"Excel"})];
       await Store.set("plan",newId(),p); n++; if(!planUph(p)) sinUph++;
     }
-    toast(`Plan: ${n} filas cargadas${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
+    toast(`Plan: ${n} filas cargadas${nPend?` (${nPend} enviadas a aprobación de Gerencia)`:""}${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
   });
+}
+function openPlanEdit(p){
+  const root=document.getElementById("modal-root"), c=cfg(), req=needsApproval(p.fecha);
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="pe-t">
+    <div class="ph"><h3 id="pe-t">Editar plan</h3><button class="btn ghost" id="pe-x">Cancelar</button></div>
+    <form class="pb" id="f-pe">
+      <div class="note"><b class="mono">${esc(p.ensamble)}</b> · ${esc(p.fecha)}${req?`<br>Está dentro del plazo de ${c.anticipacion} día${c.anticipacion>1?"s":""}: el cambio se envía a <b>aprobación de Gerencia</b> y el plan vigente no cambia hasta aprobarse.`:""}</div>
+      <div class="row">
+        <div class="fld"><label for="pe-cant">Cantidad</label><input id="pe-cant" type="number" min="1" class="w-s" value="${esc(p.cantidad)}" required></div>
+        <div class="fld"><label for="pe-uph">UPH</label><input id="pe-uph" type="number" min="1" class="w-xs" value="${esc(p.uph||"")}" placeholder="${S.bom[safeId(p.ensamble)]?.uph?"BOM":""}"></div>
+        <div class="fld"><label for="pe-turno">Turno</label><select id="pe-turno">${Object.keys(c.turnos).map(t=>`<option ${p.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="fld"><label for="pe-linea">Línea</label><input id="pe-linea" class="w-s" value="${esc(p.linea)}" required></div>
+      </div>
+      <div class="err" id="pe-err"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn pri">${req?"Enviar a aprobación":"Guardar cambios"}</button></div>
+    </form></div></div>`;
+  const close=()=>root.innerHTML="";
+  document.getElementById("pe-x").onclick=close;
+  document.getElementById("f-pe").onsubmit=async e=>{e.preventDefault();
+    const nv={cantidad:Number(ffv("pe-cant")),uph:Number(ffv("pe-uph"))||null,turno:ffv("pe-turno"),linea:ffv("pe-linea")};
+    const cambios={}; Object.keys(nv).forEach(k=>{ if((p[k]??null)!==nv[k]) cambios[k]=nv[k]; });
+    if(!Object.keys(cambios).length) return close();
+    if(!planUph(Object.assign({},p,nv))) return document.getElementById("pe-err").textContent=`Captura el UPH de ${p.ensamble}.`;
+    const next=req?Object.assign({},p,{pendiente:solicitud("cambio",{cambios})})
+      :Object.assign({},p,cambios,{historial:[...(p.historial||[]),histEntry("cambio",{cambios})]});
+    if(await safeWrite(()=>Store.set("plan",p._id,next))){ close(); toast(req?"Cambio enviado a aprobación de Gerencia.":"Plan actualizado."); }
+  };
 }
 
 /* ===================== BOM ===================== */
@@ -660,7 +754,7 @@ function bindBomImport(){
    Una línea está al 100 % cuando todos los surtidos cuya hora ya llegó están confirmados. */
 function lineBoard(fecha,turno,now){
   const L={};
-  Object.values(S.plan).filter(p=>p.fecha===fecha&&(!turno||p.turno===turno)).forEach(p=>{
+  activePlans().filter(p=>p.fecha===fecha&&(!turno||p.turno===turno)).forEach(p=>{
     const ln=L[p.linea]=L[p.linea]||{linea:p.linea,ens:new Set(),turnos:new Set(),ok:0,due:0,soon:0,total:0,done:0,pend:[],st:{},err:[],waiting:[],paro:activeStop(fecha,p.linea)};
     ln.ens.add(p.ensamble); ln.turnos.add(p.turno);
     const r=computeItems(p); if(r.error) ln.err.push(r.error); if(r.waiting) ln.waiting.push(p);
@@ -723,7 +817,7 @@ const ago=m=>m<60?Math.max(1,Math.round(m))+" min":Math.floor(m/60)+" h "+String
 /* ===================== Surtido ===================== */
 function viewSurtido(app){
   const c=cfg(), now=Date.now();
-  const plans=Object.values(S.plan).filter(p=>p.fecha===S.sel.fecha);
+  const plans=activePlans().filter(p=>p.fecha===S.sel.fecha);
   const lineas=[...new Set(plans.map(p=>p.linea))].sort();
   if(S.sel.linea && !lineas.includes(S.sel.linea)) S.sel.linea="";
   const shown=plans.filter(p=>(!S.sel.turno||p.turno===S.sel.turno)&&(!S.sel.linea||p.linea===S.sel.linea));
@@ -925,7 +1019,7 @@ function openConfirm(p,it,trip){
 /* ===================== Métricas ===================== */
 function viewMetricas(app){
   const c=cfg(), now=Date.now();
-  const plans=Object.values(S.plan).filter(p=>p.fecha===S.sel.fecha&&(!S.sel.turno||p.turno===S.sel.turno));
+  const plans=activePlans().filter(p=>p.fecha===S.sel.fecha&&(!S.sel.turno||p.turno===S.sel.turno));
   const byLine={}; let tot=0,done=0,onTime=0,due=0,delays=[];
   plans.forEach(p=>computeItems(p).items.forEach(it=>it.trips.forEach(t=>{
     const s=tripStatus(t,now); const L=byLine[p.linea]=byLine[p.linea]||{tot:0,ok:0,late:0,due:0};
@@ -996,11 +1090,12 @@ function viewGafetes(app){
         <button class="btn pri">Registrar gafete</button></form></div></div>
       <div class="panel"><div class="ph"><h3>Parámetros de surtido</h3></div><div class="pb"><form id="f-cfg" class="stack">
         <div class="row"><div class="fld"><label for="c-pct">Punto de reorden %</label><input id="c-pct" type="number" min="20" max="90" value="${c.pct}" class="w-xs"></div>
-        <div class="fld"><label for="c-tol">Tolerancia min</label><input id="c-tol" type="number" min="0" value="${c.tolerancia}" class="w-xs"></div></div>
+        <div class="fld"><label for="c-tol">Tolerancia min</label><input id="c-tol" type="number" min="0" value="${c.tolerancia}" class="w-xs"></div>
+        <div class="fld"><label for="c-ant">Anticipación del plan (días)</label><input id="c-ant" type="number" min="0" step="1" value="${c.anticipacion}" class="w-xs" title="Altas, cambios o bajas del plan con menos anticipación requieren aprobación de Gerencia. 0 = no se requiere aprobación."></div></div>
         ${Object.entries(c.turnos).map(([t,v])=>`<div class="row"><div class="fld"><label>${t}</label><span class="mono">Turno</span></div>
           <div class="fld"><label for="c-${t}-i">Inicio</label><input type="time" id="c-${t}-i" value="${v.inicio}"></div>
           <div class="fld"><label for="c-${t}-f">Fin</label><input type="time" id="c-${t}-f" value="${v.fin}"></div></div>`).join("")}
-        <p class="small muted" style="margin:0">El punto de reorden nunca baja de 20%.</p>
+        <p class="small muted" style="margin:0">El punto de reorden nunca baja de 20%. Con anticipación 0, el plan se modifica sin aprobación de Gerencia.</p>
         <button class="btn pri">Guardar parámetros</button></form></div></div>
     </div>
     <div class="panel"><div class="ph"><h3>Gafetes registrados</h3>
@@ -1031,7 +1126,7 @@ function viewGafetes(app){
   document.getElementById("f-cfg").onsubmit=async e=>{e.preventDefault();
     const turnos={}; Object.keys(c.turnos).forEach(t=>turnos[t]={inicio:ffv(`c-${t}-i`),fin:ffv(`c-${t}-f`)});
     const pct=Math.max(20,Number(ffv("c-pct"))||20);
-    if(await safeWrite(()=>Store.set("config","general",{pct,tolerancia:Number(ffv("c-tol"))||0,turnos}))) toast("Parámetros guardados");};
+    if(await safeWrite(()=>Store.set("config","general",{pct,tolerancia:Number(ffv("c-tol"))||0,anticipacion:Math.max(0,Math.floor(Number(ffv("c-ant")))||0),turnos}))) toast("Parámetros guardados");};
   app.querySelectorAll("[data-rol]").forEach(s=>s.onchange=()=>{const u=S.gafetes[s.dataset.rol]; safeWrite(()=>Store.set("gafetes",u._id,Object.assign({},u,{rol:s.value})));});
   app.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=()=>{const u=S.gafetes[b.dataset.delUser]; confirmBox(`¿Dar de baja a ${u.nombre}?`,"Dar de baja",()=>safeWrite(()=>Store.del("gafetes",u._id)));});
 }
