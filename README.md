@@ -49,15 +49,15 @@ Al abrir la app con un equipo autorizado y sin gafetes registrados, la app pide 
 
 Cada sección tiene un botón **Plantilla Excel** con las columnas esperadas:
 
-- **Plan:** Fecha, Ensamble, Cantidad, Turno, Linea, UPH (opcional), Arranque (opcional: `turno` o `manual`)
-- **BOM:** Ensamble, UPH, NP, Descripcion, Estacion, CantidadPorUnidad, Empaque
+- **Plan:** Fecha, Ensamble, Cantidad, Turno, Linea, UPH, Arranque (opcional: `turno` o `manual`)
+- **BOM:** Ensamble, NP, Descripcion, Estacion, CantidadPorUnidad, Empaque, UPH (opcional; normalmente va en el plan)
 - **Gafetes:** Gafete, Nombre, Area, Rol (`admin`, `planeador`, `materialista`, `lider`, `supervisor`, `receptor`)
 
 ## Cálculo del surtido
 
 Para cada NP en su estación:
 
-- Consumo por hora = UPH × cantidad por unidad
+- Consumo por hora = UPH del plan × cantidad por unidad del BOM (si el plan no trae UPH, se usa el del BOM)
 - Punto de reorden = empaque × % de reorden (mínimo 20 %, se ajusta en Gafetes y ajustes)
 - Cantidad a surtir = empaque − punto de reorden
 - Frecuencia = cantidad a surtir ÷ consumo por hora

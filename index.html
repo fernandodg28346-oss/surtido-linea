@@ -315,7 +315,7 @@ function timeline(p,start){
 }
 function computeItems(p){
   const b=S.bom[safeId(p.ensamble)]; if(!b) return {error:"Sin BOM para el ensamble "+p.ensamble, items:[]};
-  const uph=planUph(p); if(!uph) return {error:"Falta UPH para "+p.ensamble, items:[]};
+  const uph=planUph(p); if(!uph) return {error:"Falta UPH en el plan para "+p.ensamble, items:[]};
   const start=planStart(p); if(!start) return {waiting:true, items:[]};
   const pct=cfg().pct/100, tl=timeline(p,start.getTime());
   const items=(b.items||[]).map(it=>{
@@ -479,7 +479,7 @@ function viewPlan(app){
   const rows=Object.values(S.plan).sort((a,b)=>(b.fecha+a.turno+a.linea).localeCompare(a.fecha+b.turno+b.linea));
   const ens=Object.values(S.bom).map(b=>b.ensamble).sort();
   app.innerHTML=`
-  <div class="view-head"><div><h2>Plan de producción</h2><p>Qué ensamble corre, cuántas piezas, en qué turno y en qué línea. El surtido se calcula a partir de este plan y del BOM.</p></div>
+  <div class="view-head"><div><h2>Plan de producción</h2><p>Qué ensamble corre, cuántas piezas, a qué UPH, en qué turno y en qué línea. Con el UPH se calcula el consumo por hora de cada NP del BOM (UPH × cantidad por unidad).</p></div>
   ${ed?`<div class="row"><button class="btn" id="tpl-plan">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-plan" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
   ${ed?`<div class="panel" style="margin-bottom:16px"><div class="pb">
     <form id="f-plan" class="row">
@@ -488,7 +488,7 @@ function viewPlan(app){
       <div class="fld"><label for="p-cant">Cantidad</label><input id="p-cant" type="number" min="1" class="w-s" required></div>
       <div class="fld"><label for="p-turno">Turno</label><select id="p-turno">${Object.keys(c.turnos).map(t=>`<option>${t}</option>`).join("")}</select></div>
       <div class="fld"><label for="p-linea">Línea</label><input id="p-linea" class="w-s" required></div>
-      <div class="fld"><label for="p-uph">UPH <span class="muted">(opcional)</span></label><input id="p-uph" type="number" min="1" class="w-xs" placeholder="BOM"></div>
+      <div class="fld"><label for="p-uph">UPH</label><input id="p-uph" type="number" min="1" class="w-xs" title="Unidades por hora del ensamble; con él se calcula el consumo de cada NP"></div>
       <div class="fld"><label for="p-arr">Arranque</label><select id="p-arr"><option value="turno">Al inicio del turno</option><option value="manual">Manual (Iniciar ensamble)</option></select></div>
       <button class="btn pri">Agregar al plan</button>
     </form></div></div>`:""}
@@ -496,7 +496,7 @@ function viewPlan(app){
     <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th><th>Arranque</th>${ed?"<th></th>":""}</tr></thead>
     <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr>
       <td class="mono">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}</td>
-      <td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):"—"}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
+      <td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
       <td>${hasB?'<span class="pill p-ok">Cargado</span>':'<span class="pill p-bad">Falta BOM</span>'}</td>
       <td>${startLabel(p)}</td>
       ${ed?`<td><button class="btn danger" data-del-plan="${p._id}">Quitar</button></td>`:""}</tr>`}).join(""):`<tr><td colspan="10" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
@@ -504,20 +504,21 @@ function viewPlan(app){
   if(!ed) return;
   document.getElementById("f-plan").onsubmit=async e=>{e.preventDefault();
     const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:ffv("p-arr"),creado:Date.now(),por:S.me.gafete};
+    if(!planUph(p)) return toast(`Captura el UPH de ${p.ensamble}: con él se calcula el consumo de cada NP.`);
     S.sel.fecha=p.fecha; await safeWrite(()=>Store.set("plan",newId(),p)); toast("Agregado: "+p.ensamble+" en "+p.linea);
   };
   app.querySelectorAll("[data-del-plan]").forEach(b=>b.onclick=()=>confirmBox("¿Quitar esta fila del plan?","Quitar",()=>safeWrite(()=>Store.del("plan",b.dataset.delPlan))));
   document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","Cantidad","Turno","Linea","UPH","Arranque"],[today(),"ENS-1001",480,"T1","L1",60,"turno"],[today(),"ENS-2002",200,"T1","L2",40,"manual"]]);
   document.getElementById("xl-plan").onchange=e=>readXlsx(e.target.files[0],async rows=>{
-    let n=0, bad=0;
+    let n=0, bad=0, sinUph=0;
     for(const r of rows){
       const g=k=>pick(r,k);
       const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:/manual/i.test(String(g(["arranque","inicio","start"])||""))?"manual":"turno",creado:Date.now(),por:S.me.gafete};
       if(/^\d$/.test(p.turno)) p.turno="T"+p.turno;
       if(!p.fecha||!p.ensamble||!(p.cantidad>0)||!p.turno||!p.linea){bad++;continue;}
-      await Store.set("plan",newId(),p); n++;
+      await Store.set("plan",newId(),p); n++; if(!planUph(p)) sinUph++;
     }
-    toast(`Plan: ${n} filas cargadas${bad?`, ${bad} ignoradas por datos incompletos`:""}.`);
+    toast(`Plan: ${n} filas cargadas${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
   });
 }
 
@@ -530,23 +531,23 @@ function viewBom(app){
   const del=S.sel.bomDel; [...del].forEach(id=>{ if(!S.bom[id]) del.delete(id); });
   const allSel=list.length>0&&del.size===list.length;
   app.innerHTML=`
-  <div class="view-head"><div><h2>BOM · materiales por ensamble</h2><p>Cada NP con su estación, cantidad por unidad y cantidad de empaque (lo que cabe en la estación). El UPH del ensamble se usa si el plan no trae uno.</p></div>
+  <div class="view-head"><div><h2>BOM · materiales por ensamble</h2><p>Cada NP con su estación, cantidad por unidad y cantidad de empaque (lo que cabe en la estación). El UPH se captura en el plan de producción; aquí es opcional y solo se usa si el plan no trae uno.</p></div>
   ${ed?`<div class="row"><button class="btn" id="tpl-bom">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-bom" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
   <div class="grid2">
     <div class="panel"><div class="ph"><h3>Ensambles</h3><span class="muted small">${list.length}</span></div>
       ${ed?`<div class="pb" style="border-bottom:1px solid var(--line)"><form id="f-ens" class="row">
         <div class="fld" style="flex:1"><label for="e-id">Ensamble</label><input id="e-id" required></div>
-        <div class="fld"><label for="e-uph">UPH</label><input id="e-uph" type="number" min="1" class="w-xs" required></div>
+        <div class="fld"><label for="e-uph">UPH <span class="muted">(opcional)</span></label><input id="e-uph" type="number" min="1" class="w-xs" placeholder="Plan"></div>
         <button class="btn pri">Crear</button></form></div>`:""}
       ${ed&&list.length?`<div class="bulk"><label><input type="checkbox" id="bom-all" ${allSel?"checked":""}> Seleccionar todos</label>
         <button class="btn danger" id="bom-del-sel" ${del.size?"":"disabled"}>Eliminar seleccionados (${del.size})</button></div>`:""}
       <div class="tbl-wrap"><table><tbody>${list.length?list.map(b=>`<tr style="cursor:pointer;${b._id===S.sel.bom?"background:var(--accent-soft)":""}" data-sel-bom="${b._id}">
         ${ed?`<td style="width:32px"><input type="checkbox" data-bom-chk="${b._id}" ${del.has(b._id)?"checked":""} aria-label="Seleccionar ${esc(b.ensamble)}"></td>`:""}
-        <td class="mono"><b>${esc(b.ensamble)}</b><div class="small muted">${esc(b.desc||"")}</div></td><td class="num small">${(b.items||[]).length} NP</td><td class="num small">${b.uph?fmtN(b.uph)+" UPH":"sin UPH"}</td></tr>`).join(""):`<tr><td class="empty">Sin ensambles. ${ed?"Crea uno o carga el Excel del BOM.":""}</td></tr>`}</tbody></table></div>
+        <td class="mono"><b>${esc(b.ensamble)}</b><div class="small muted">${esc(b.desc||"")}</div></td><td class="num small">${(b.items||[]).length} NP</td><td class="num small">${b.uph?fmtN(b.uph)+" UPH":"UPH del plan"}</td></tr>`).join(""):`<tr><td class="empty">Sin ensambles. ${ed?"Crea uno o carga el Excel del BOM.":""}</td></tr>`}</tbody></table></div>
     </div>
     <div class="panel">${cur?`
       <div class="ph"><div><h3 class="mono">${esc(cur.ensamble)}</h3></div>
-        ${ed?`<div class="row"><div class="fld"><label for="cur-uph">UPH</label><input id="cur-uph" type="number" min="1" class="w-xs" value="${cur.uph||""}"></div><button class="btn danger" id="del-ens">Eliminar ensamble</button></div>`:`<span class="muted">${cur.uph||"—"} UPH</span>`}</div>
+        ${ed?`<div class="row"><div class="fld"><label for="cur-uph">UPH <span class="muted">(opcional)</span></label><input id="cur-uph" type="number" min="1" class="w-xs" placeholder="Plan" value="${cur.uph||""}"></div><button class="btn danger" id="del-ens">Eliminar ensamble</button></div>`:`<span class="muted">${cur.uph?fmtN(cur.uph)+" UPH":"UPH del plan"}</span>`}</div>
       ${ed?`<div class="pb" style="border-bottom:1px solid var(--line)"><form id="f-item" class="row">
         <div class="fld"><label for="i-np">NP</label><input id="i-np" class="w-m" required></div>
         <div class="fld"><label for="i-desc">Descripción</label><input id="i-desc" class="w-m"></div>
@@ -576,10 +577,12 @@ function viewBom(app){
       });
     };
   }
-  document.getElementById("tpl-bom").onclick=()=>downloadXlsx("plantilla_bom.xlsx",[["Ensamble","UPH","NP","Descripcion","Estacion","CantidadPorUnidad","Empaque"],["ENS-1001",60,"NP-55021","Tornillo M4x10","E10",4,1000],["ENS-1001",60,"NP-30877","Arnés principal","E20",1,40]]);
+  document.getElementById("tpl-bom").onclick=()=>downloadXlsx("plantilla_bom.xlsx",[["Ensamble","NP","Descripcion","Estacion","CantidadPorUnidad","Empaque"],["ENS-1001","NP-55021","Tornillo M4x10","E10",4,1000],["ENS-1001","NP-30877","Arnés principal","E20",1,40]]);
   document.getElementById("f-ens").onsubmit=async e=>{e.preventDefault(); const id=ffv("e-id"); const k=safeId(id);
     if(S.bom[k]) {S.sel.bom=k; render(); return toast("El ensamble ya existe.");}
-    await safeWrite(()=>Store.set("bom",k,{ensamble:id,uph:Number(ffv("e-uph")),items:[]})); S.sel.bom=k; };
+    const nb={ensamble:id,uph:Number(ffv("e-uph"))||null,items:[]};
+    // Se agrega localmente para que la vista no regrese al primer ensamble si otro dato se refresca antes.
+    if(await safeWrite(()=>Store.set("bom",k,nb))){ S.bom[k]=Object.assign({_id:k},nb); S.sel.bom=k; render(); } };
   if(!cur) { bindBomImport(); return; }
   const saveCur=items=>safeWrite(()=>Store.set("bom",cur._id,Object.assign({},cur,items?{items}:{})));
   document.getElementById("cur-uph").onchange=e=>{cur.uph=Number(e.target.value)||null; saveCur(); toast("UPH actualizado");};
@@ -631,7 +634,7 @@ function viewLineas(app){
   const c=cfg(), now=Date.now(), lines=lineBoard(S.sel.fecha,S.sel.turno,now);
   const al100=lines.filter(l=>l.state==="ok"||l.state==="soon").length, falt=lines.filter(l=>l.state==="due").length;
   const pendNP=lines.reduce((n,l)=>n+l.due,0);
-  const pill={ok:'<span class="pill p-ok">Al 100%</span>',soon:'<span class="pill p-warn">Al 100% · surtido próximo</span>',due:'<span class="pill p-bad">Falta resurtir</span>',err:'<span class="pill p-idle">Sin BOM o UPH</span>',stop:'<span class="pill p-warn">Línea detenida</span>',wait:'<span class="pill p-idle">Esperando arranque</span>'};
+  const pill={ok:'<span class="pill p-ok">Al 100%</span>',soon:'<span class="pill p-warn">Al 100% · surtido próximo</span>',due:'<span class="pill p-bad">Falta resurtir</span>',err:'<span class="pill p-idle">Falta BOM o UPH en el plan</span>',stop:'<span class="pill p-warn">Línea detenida</span>',wait:'<span class="pill p-idle">Esperando arranque</span>'};
   app.innerHTML=`
   <div class="view-head"><div><h2>Estado de líneas</h2><p>Una línea está al 100% cuando todos los surtidos que ya tocaban están confirmados. Las que tienen surtidos vencidos aparecen primero.</p></div></div>
   <div class="filters">
