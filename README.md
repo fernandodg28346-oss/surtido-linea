@@ -9,7 +9,7 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 1. **Equipo:** cada tablet o PC inicia sesión una sola vez con una cuenta de equipo de Supabase.
 2. **Gafete:** cada persona entra escaneando su gafete. El rol del gafete define qué pestañas ve.
-3. **Surtido:** el materialista presiona **Confirmar surtido** y quien recibe en línea escanea su gafete. Con eso queda registrado quién surtió, quién recibió y a qué hora.
+3. **Surtido:** el materialista o el líder de línea presiona **Confirmar surtido** y quien recibe en línea escanea su gafete. Con eso queda registrado quién surtió, quién recibió y a qué hora.
 
 | Rol | Acceso |
 |---|---|
@@ -17,7 +17,7 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 | Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas |
 | Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas |
 | Materialista | Líneas y Surtido (confirma surtidos) |
-| Líder de línea | Líneas, Surtido, Métricas |
+| Líder de línea | Líneas, Surtido (confirma surtidos), Métricas |
 | Supervisor | Líneas, Métricas, Surtido, Plan (consulta) |
 | Recibe material | No entra a la app; solo su gafete se usa para recibir |
 
@@ -67,9 +67,9 @@ El primer surtido es al arranque del ensamble, con la estación llena. Una líne
 
 ## Anticipación y aprobación del plan
 
-El plan se postea con anticipación (1 día por defecto; el administrador lo cambia en **Gafetes y ajustes → Anticipación del plan**, y con 0 no se pide aprobación).
+El plan se postea con anticipación al **inicio del turno** del plan: 24 horas por defecto. El administrador lo cambia en **Gafetes y ajustes → Anticipación del plan (horas)**; con 0 no se pide aprobación.
 
-- Altas, cambios (**Editar**: cantidad, UPH, turno, línea) y bajas (**Quitar**) de un plan cuya fecha queda dentro de ese plazo, o ya pasó, se envían a **aprobación de Gerencia**. Con el plazo de 1 día, lo que se postea hoy para mañana o después entra directo; lo de hoy requiere aprobación.
+- Altas, cambios (**Editar**: cantidad, UPH, turno, línea) y bajas (**Quitar**) de un plan cuyo turno inicia dentro de ese plazo, o ya inició, se envían a **aprobación de Gerencia**. Con 24 h y el T1 a las 07:00, el plan del T1 de mañana entra directo si se postea antes de hoy a las 07:00. Al editar, cambiar a un turno que inicia dentro del plazo también requiere aprobación.
 - Mientras está pendiente, el plan vigente no cambia y un alta pendiente no genera surtidos.
 - Gerencia y el administrador ven la cuenta de pendientes en la pestaña del plan y los aprueban o rechazan; sus propios cambios se aplican directo. Quien solicitó puede cancelar la solicitud.
 - Cada plan guarda un historial de quién solicitó y quién aprobó o rechazó.
