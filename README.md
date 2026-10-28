@@ -73,6 +73,7 @@ El plan se postea con anticipación al **inicio del turno** del plan: 24 horas p
 - Mientras está pendiente, el plan vigente no cambia y un alta pendiente no genera surtidos.
 - Gerencia y el administrador ven la cuenta de pendientes en la pestaña del plan y los aprueban o rechazan; sus propios cambios se aplican directo. Quien solicitó puede cancelar la solicitud.
 - Cada plan guarda un historial de quién solicitó y quién aprobó o rechazó.
+- **Rolar:** un plan que se posteó en tiempo (con la anticipación requerida respecto a su turno original) se recorre a un turno posterior **sin aprobación**, mientras no haya arrancado (sin surtidos confirmados ni ensamble iniciado). La fila muestra desde qué turno se roló. Para mover un plan que no se posteó en tiempo se usa **Editar**, que pide aprobación.
 
 Esta regla la aplica la app según el gafete con el que se entra, igual que los demás roles.
 
