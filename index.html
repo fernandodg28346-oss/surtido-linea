@@ -537,6 +537,22 @@ const ffv=id=>document.getElementById(id).value.trim();
 const PLAN_CAMPOS={cantidad:"Cantidad",uph:"UPH",turno:"Turno",linea:"Línea"};
 const PEND_LABEL={alta:"Alta",cambio:"Cambio",baja:"Baja"};
 function hoursAhead(p){ return (shiftStart(p.fecha,p.turno).getTime()-Date.now())/3600000; }
+// Rolar: un plan posteado en tiempo y forma (creado con la anticipación requerida respecto a su turno original)
+// se puede recorrer a un turno posterior sin aprobación, mientras no haya arrancado.
+function planOrigen(p){ return p.original||{fecha:p.fecha,turno:p.turno}; }
+function postedOnTime(p){ const o=planOrigen(p); return !!p.creado && (shiftStart(o.fecha,o.turno).getTime()-p.creado)/3600000>=cfg().anticipacion; }
+function rollBlock(p){
+  if(p.pendiente) return "Tiene una solicitud pendiente de aprobación.";
+  if(!postedOnTime(p)) return `No se posteó con ${fmtHoras(cfg().anticipacion)} de anticipación; para moverlo usa Editar (requiere aprobación).`;
+  if(p.inicioReal) return "El ensamble ya se inició.";
+  return "";
+}
+function nextShift(fecha,turno){
+  const ts=Object.keys(cfg().turnos), i=ts.indexOf(turno);
+  if(i>=0&&i<ts.length-1) return {fecha,turno:ts[i+1]};
+  const d=new Date(fecha+"T00:00:00"); d.setDate(d.getDate()+1);
+  return {fecha:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"),turno:ts[0]};
+}
 // Requiere aprobación si alguno de los planes (p. ej. el actual y el editado) inicia dentro del plazo.
 function needsApproval(...plans){ return !can.approve() && plans.some(p=>hoursAhead(p)<cfg().anticipacion); }
 const fmtHoras=h=>fmtN(h,1)+" h";
@@ -590,11 +606,11 @@ function viewPlan(app){
   <div class="panel"><div class="tbl-wrap"><table>
     <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th><th>Arranque</th>${ed?"<th></th>":""}</tr></thead>
     <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr${p.pendiente?.tipo==="alta"?' style="opacity:.6"':""}>
-      <td class="mono" style="white-space:nowrap">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}${p.pendiente?`<div><span class="pill p-warn" title="Pendiente de aprobación de Gerencia">${PEND_LABEL[p.pendiente.tipo]} pendiente</span></div>`:""}</td>
+      <td class="mono" style="white-space:nowrap">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}${p.pendiente?`<div><span class="pill p-warn" title="Pendiente de aprobación de Gerencia">${PEND_LABEL[p.pendiente.tipo]} pendiente</span></div>`:""}${p.original?`<div class="small muted" style="font-family:var(--f-body);white-space:nowrap">Rolado desde ${esc(p.original.fecha)} ${esc(p.original.turno)}</div>`:""}</td>
       <td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
       <td>${hasB?'<span class="pill p-ok">Cargado</span>':'<span class="pill p-bad">Falta BOM</span>'}</td>
       <td>${startLabel(p)}</td>
-      ${ed?`<td><div class="row" style="flex-wrap:nowrap">${p.pendiente?'<span class="small muted">En aprobación</span>':`<button class="btn ghost" data-edit-plan="${p._id}">Editar</button><button class="btn danger" data-del-plan="${p._id}">Quitar</button>`}</div></td>`:""}</tr>`}).join(""):`<tr><td colspan="10" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
+      ${ed?`<td><div class="row" style="flex-wrap:nowrap">${p.pendiente?'<span class="small muted">En aprobación</span>':`${(rb=>`<button class="btn ghost" data-roll-plan="${p._id}" ${rb?`disabled title="${esc(rb)}"`:'title="Recorrer a otro turno sin aprobación"'}>Rolar</button>`)(rollBlock(p))}<button class="btn ghost" data-edit-plan="${p._id}">Editar</button><button class="btn danger" data-del-plan="${p._id}">Quitar</button>`}</div></td>`:""}</tr>`}).join(""):`<tr><td colspan="10" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
   </table></div></div>`;
   app.querySelectorAll("[data-aprobar],[data-rechazar]").forEach(b=>b.onclick=()=>{
     const ok=!!b.dataset.aprobar, p=S.plan[b.dataset.aprobar||b.dataset.rechazar]; if(!p?.pendiente) return;
@@ -624,6 +640,7 @@ function viewPlan(app){
     else confirmBox("¿Quitar esta fila del plan?","Quitar",()=>safeWrite(()=>Store.del("plan",p._id)));
   });
   app.querySelectorAll("[data-edit-plan]").forEach(b=>b.onclick=()=>openPlanEdit(S.plan[b.dataset.editPlan]));
+  app.querySelectorAll("[data-roll-plan]").forEach(b=>b.onclick=()=>openPlanRoll(S.plan[b.dataset.rollPlan]));
   document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","Cantidad","Turno","Linea","UPH","Arranque"],[today(),"ENS-1001",480,"T1","L1",60,"turno"],[today(),"ENS-2002",200,"T1","L2",40,"manual"]]);
   document.getElementById("xl-plan").onchange=e=>readXlsx(e.target.files[0],async rows=>{
     let n=0, bad=0, sinUph=0, nPend=0;
@@ -638,6 +655,34 @@ function viewPlan(app){
     }
     toast(`Plan: ${n} filas cargadas${nPend?` (${nPend} enviadas a aprobación de Gerencia)`:""}${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
   });
+}
+function openPlanRoll(p){
+  const root=document.getElementById("modal-root"), c=cfg(), nx=nextShift(p.fecha,p.turno), o=planOrigen(p);
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="pr-t">
+    <div class="ph"><h3 id="pr-t">Rolar plan</h3><button class="btn ghost" id="pr-x">Cancelar</button></div>
+    <form class="pb" id="f-pr">
+      <div class="note"><b class="mono">${esc(p.ensamble)}</b> · ${fmtN(p.cantidad)} pzs · Línea <b>${esc(p.linea)}</b><br>
+        Turno actual: <b>${esc(p.fecha)} ${esc(p.turno)}</b>${p.original?` (posteado para ${esc(o.fecha)} ${esc(o.turno)})`:""}.
+        Se posteó en tiempo, así que se recorre a un turno posterior <b>sin aprobación</b>.</div>
+      <div class="row">
+        <div class="fld"><label for="pr-fecha">Nueva fecha</label><input type="date" id="pr-fecha" value="${nx.fecha}" min="${esc(p.fecha)}" required></div>
+        <div class="fld"><label for="pr-turno">Nuevo turno</label><select id="pr-turno">${Object.keys(c.turnos).map(t=>`<option ${nx.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
+      </div>
+      <div class="err" id="pr-err"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn pri">Rolar plan</button></div>
+    </form></div></div>`;
+  const close=()=>root.innerHTML="", err=m=>document.getElementById("pr-err").textContent=m;
+  document.getElementById("pr-x").onclick=close;
+  document.getElementById("f-pr").onsubmit=async e=>{e.preventDefault();
+    const fecha=ffv("pr-fecha"), turno=ffv("pr-turno");
+    if(shiftStart(fecha,turno)<=shiftStart(p.fecha,p.turno)) return err("Elige un turno posterior al actual.");
+    const btn=e.target.querySelector("button.pri"); btn.disabled=true;
+    // Los surtidos ya confirmados quedan ligados a la fecha del plan; si ya hay alguno, el plan ya arrancó.
+    let usados=0; try{ usados=Object.keys(await Store.fetch("surtidos",{field:"planId",value:p._id})).length; }catch(x){ btn.disabled=false; return err("No se pudo comprobar los surtidos del plan. Revisa la conexión."); }
+    if(usados){ btn.disabled=false; return err(`Ya tiene ${usados} surtido${usados>1?"s":""} confirmado${usados>1?"s":""}: el plan ya arrancó y no se puede rolar.`); }
+    const next=Object.assign({},p,{fecha,turno,original:o,historial:[...(p.historial||[]),histEntry("roló",{de:p.fecha+" "+p.turno,a:fecha+" "+turno})]});
+    if(await safeWrite(()=>Store.set("plan",p._id,next))){ close(); toast(`${p.ensamble} rolado a ${fecha} ${turno}.`); } else btn.disabled=false;
+  };
 }
 function openPlanEdit(p){
   const root=document.getElementById("modal-root"), c=cfg(), req=needsApproval(p);
