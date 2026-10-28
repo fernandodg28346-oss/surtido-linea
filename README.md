@@ -2,7 +2,7 @@
 
 App web para el surtido de materiales a líneas de producción: plan de producción, BOM por ensamble, cálculo de cada cuánto surtir cada NP por estación (punto de reorden mínimo 20 % según UPH), confirmación de surtido con gafete, estado de líneas y métricas por rol.
 
-- **Frontend:** un solo archivo [`index.html`](index.html), publicado con GitHub Pages.
+- **Frontend:** HTML, CSS y JavaScript sin compilación (ver [Estructura](#estructura)), publicado con GitHub Pages.
 - **Datos:** Supabase (tablas `sl_*`), con actualización en tiempo real entre equipos.
 
 ## Cómo se usa
@@ -91,6 +91,31 @@ En **BOM**, las casillas de la lista de ensambles y **Seleccionar todos** permit
 
 ## Configuración
 
-[`config.js`](config.js) tiene la URL del proyecto de Supabase y su clave pública (anon). Esa clave está hecha para ir en el navegador; los datos están protegidos por las reglas RLS. **Nunca** pongas la clave `service_role` en este repositorio.
+[`js/config.js`](js/config.js) tiene la URL del proyecto de Supabase y su clave pública (anon). Esa clave está hecha para ir en el navegador; los datos están protegidos por las reglas RLS. **Nunca** pongas la clave `service_role` en este repositorio.
 
 El esquema de la base está en [`supabase/migrations/`](supabase/migrations/).
+
+## Estructura
+
+```
+index.html            Estructura de la página y orden de carga de los scripts
+css/estilos.css       Estilos (tema claro y oscuro, menú lateral, tablero)
+js/
+  config.js           URL y clave pública de Supabase
+  almacen.js          Lectura y escritura en Supabase (tablas sl_*) con tiempo real
+  estado.js           Estado de la app, parámetros, roles y permisos
+  calculo.js          Cálculo del programa de surtido (paros, reconteos, arranque)
+  sesion.js           Sesión del equipo, gafete, menú y navegación
+  vistas/
+    plan.js           Plan de producción (aprobación de Gerencia, editar, rolar)
+    bom.js            BOM por ensamble
+    lineas.js         Estado de líneas
+    surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
+    metricas.js       Métricas y bitácoras
+    gafetes.js        Gafetes y parámetros
+  utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
+  arranque.js         Inicia la app (va al final del orden de carga)
+supabase/migrations/  Esquema de la base de datos
+```
+
+Los scripts comparten funciones y variables globales, así que el orden de los `<script>` en `index.html` importa: `arranque.js` siempre va al último.
