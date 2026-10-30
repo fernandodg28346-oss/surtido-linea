@@ -7,8 +7,8 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 ## Cómo se usa
 
-1. **Equipo:** cada tablet o PC inicia sesión una sola vez con una cuenta de equipo de Supabase.
-2. **Gafete:** cada persona entra escaneando su gafete. El rol del gafete define qué pestañas ve.
+1. **Cuenta:** cada persona entra con su **correo y contraseña**. Quien no tiene cuenta la crea en **Crear cuenta** (nombre, número de gafete, correo y contraseña) y queda pendiente.
+2. **Aprobación:** el administrador aprueba la solicitud en **Usuarios**, lo que liga la cuenta al gafete de la persona y le da un rol. El rol define qué pestañas ve. Si olvidas tu contraseña, **¿Olvidaste tu contraseña?** envía un enlace al correo.
 3. **Surtido:** el materialista o el líder de línea presiona **Confirmar surtido** y quien recibe en línea escanea su gafete. Con eso queda registrado quién surtió, quién recibió y a qué hora.
 
 | Rol | Acceso |
@@ -23,28 +23,30 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 ## Puesta en marcha
 
-### 1. Crear una cuenta de equipo en Supabase
+### 1. Primer administrador
 
-En el panel de Supabase: **Authentication → Users → Add user → Create new user**, con un correo y una contraseña para el equipo (por ejemplo, `surtido-l1@tuempresa.com`). Marca **Auto Confirm User**.
-
-### 2. Autorizar la cuenta para usar el surtido
-
-En **SQL Editor**, ejecuta (cambia el correo y el nombre):
+Crea tu cuenta en la app (**Crear cuenta**) y liga tu cuenta al gafete de administrador desde **SQL Editor** de Supabase (cambia el correo y el número de gafete):
 
 ```sql
-insert into public.sl_equipos (user_id, nombre)
-select id, 'Tablet Línea 1' from auth.users where email = 'surtido-l1@tuempresa.com';
+update public.sl_gafetes g
+set data = g.data || jsonb_build_object('user_id', u.id::text, 'email', u.email, 'rol', 'admin')
+from auth.users u
+where u.email = 'tu-correo@empresa.com' and g.id = 'NUMERO_DE_GAFETE';
+delete from public.sl_solicitudes where email = 'tu-correo@empresa.com';
 ```
 
-Una cuenta que inicia sesión pero no está en `sl_equipos` no puede leer ni escribir nada. Para quitarle el acceso a un equipo, borra su fila:
+A partir de ahí, el administrador aprueba las demás solicitudes en **Usuarios**.
 
-```sql
-delete from public.sl_equipos where nombre = 'Tablet Línea 1';
-```
+### 2. Usuarios y permisos
 
-### 3. Primer uso
+- Una cuenta solo entra si está ligada a un gafete con un rol distinto de "Recibe material"; las demás cuentas del proyecto de Supabase no ven ningún dato.
+- Solo el administrador puede crear, editar o dar de baja gafetes; lo valida la base de datos (`sl_es_admin()`), no solo la app.
+- **Quitar acceso** desliga la cuenta y conserva el gafete para recibir material.
+- Quien solo recibe material no necesita cuenta: registra su gafete en **Usuarios**, a mano o desde Excel.
 
-Al abrir la app con un equipo autorizado y sin gafetes registrados, la app pide registrar al primer administrador. Él da de alta los demás gafetes en la pestaña **Usuarios**, uno por uno o desde Excel.
+### 3. Correos de Supabase
+
+Los enlaces de confirmación y de recuperación de contraseña regresan a la app. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
 
 ## Cargas desde Excel
 
@@ -120,7 +122,8 @@ js/
   almacen.js          Lectura y escritura en Supabase (tablas sl_*) con tiempo real
   estado.js           Estado de la app, parámetros, roles y permisos
   calculo.js          Cálculo del programa de surtido (paros, reconteos, arranque)
-  sesion.js           Sesión del equipo, gafete, menú y navegación
+  sesion.js           Navegación, menú y usuario en sesión
+  acceso.js           Inicio de sesión, registro, recuperar contraseña y solicitud de acceso
   grafica.js          Gráfica de barras apiladas (a tiempo, tarde, no surtido)
   vistas/
     plan.js           Plan de producción (aprobación de Gerencia, editar, rolar)
@@ -129,7 +132,7 @@ js/
     surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
     metricas.js       Métricas por día, semana o rango: por turno, por línea, tardías y bitácoras
     reportes.js       Reportes por periodo con descarga a Excel o CSV
-    gafetes.js        Usuarios: registro de gafetes y roles
+    gafetes.js        Usuarios: solicitudes de acceso, gafetes y roles
     ajustes.js        Parámetros de surtido y catálogo de líneas
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
   arranque.js         Inicia la app (va al final del orden de carga)
