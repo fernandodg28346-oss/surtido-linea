@@ -7,8 +7,8 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 ## Cómo se usa
 
-1. **Cuenta:** cada persona entra con su **correo y contraseña**. El registro abierto está desactivado: el administrador crea la cuenta en Supabase (**Authentication → Users → Add user → Create new user**, con **Auto Confirm User**). Al entrar por primera vez, la persona captura su nombre y gafete y envía su solicitud.
-2. **Aprobación:** el administrador aprueba la solicitud en **Usuarios**, lo que liga la cuenta al gafete de la persona y le da un rol. El rol define qué pestañas ve. Si olvidas tu contraseña, **¿Olvidaste tu contraseña?** envía un enlace al correo.
+1. **Solicitar acceso:** en la pantalla de inicio, quien no tiene acceso presiona **Solicitar acceso** y captura nombre, gafete, correo y área. No necesita cuenta.
+2. **Aprobación:** el administrador revisa la solicitud en **Usuarios** y la aprueba con un rol y una **contraseña inicial** que le entrega a la persona; la app crea la cuenta y la liga a su gafete. En su primer ingreso, la app le pide crear su propia contraseña. Cualquiera puede cambiarla después con **Contraseña** en el menú.
 3. **Surtido:** el materialista o el líder de línea presiona **Confirmar surtido** y quien recibe en línea escanea su gafete. Con eso queda registrado quién surtió, quién recibió y a qué hora.
 
 | Rol | Acceso |
@@ -25,17 +25,20 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 ### 1. Primer administrador
 
-Crea tu cuenta en Supabase (**Authentication → Users → Add user**) y liga tu cuenta al gafete de administrador desde **SQL Editor** de Supabase (cambia el correo y el número de gafete):
+El primer administrador se liga a su gafete desde **SQL Editor** de Supabase (su cuenta debe existir en **Authentication → Users**; cambia el correo y el número de gafete):
 
 ```sql
 update public.sl_gafetes g
 set data = g.data || jsonb_build_object('user_id', u.id::text, 'email', u.email, 'rol', 'admin')
 from auth.users u
 where u.email = 'tu-correo@empresa.com' and g.id = 'NUMERO_DE_GAFETE';
-delete from public.sl_solicitudes where email = 'tu-correo@empresa.com';
 ```
 
-A partir de ahí, el administrador crea las cuentas en Supabase y aprueba las solicitudes en **Usuarios**. El registro abierto ("Allow new users to sign up") se mantiene desactivado porque el proyecto de Supabase lo comparte otra app.
+A partir de ahí, el administrador aprueba las solicitudes en **Usuarios**. El registro abierto de Supabase ("Allow new users to sign up") se mantiene desactivado porque el proyecto lo comparte otra app; las cuentas las crea la función `sl-aprobar-acceso` al aprobar.
+
+### Función de aprobación
+
+[`supabase/functions/sl-aprobar-acceso`](supabase/functions/sl-aprobar-acceso/index.ts) es una Edge Function de Supabase. Solo responde a un administrador (lo comprueba con `sl_es_admin()`), crea la cuenta con la contraseña inicial (o usa la que ya existe con ese correo), la liga al gafete y marca la solicitud como aprobada. Usa la llave de servicio que Supabase da a sus funciones; esa llave nunca está en el navegador.
 
 ### 2. Usuarios y permisos
 
@@ -43,10 +46,11 @@ A partir de ahí, el administrador crea las cuentas en Supabase y aprueba las so
 - Solo el administrador puede crear, editar o dar de baja gafetes; lo valida la base de datos (`sl_es_admin()`), no solo la app.
 - **Quitar acceso** desliga la cuenta y conserva el gafete para recibir material.
 - Quien solo recibe material no necesita cuenta: registra su gafete en **Usuarios**, a mano o desde Excel.
+- Las solicitudes quedan en `sl_solicitudes_acceso` (pendiente, aprobada o rechazada). Cualquiera puede enviar una sin sesión, pero solo el administrador las ve y las revisa.
 
 ### 3. Correos de Supabase
 
-El enlace de recuperación de contraseña regresa a la app. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
+El enlace de "¿Olvidaste tu contraseña?" regresa a la app. El servicio de correo incluido en Supabase solo envía a los miembros del equipo del proyecto; para que llegue a todo el personal hace falta configurar un SMTP propio. Con la sesión abierta, cada quien puede cambiar la suya con **Contraseña**. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
 
 ## Cargas desde Excel
 
@@ -123,7 +127,7 @@ js/
   estado.js           Estado de la app, parámetros, roles y permisos
   calculo.js          Cálculo del programa de surtido (paros, reconteos, arranque)
   sesion.js           Navegación, menú y usuario en sesión
-  acceso.js           Inicio de sesión, recuperar contraseña y solicitud de acceso
+  acceso.js           Inicio de sesión, solicitar acceso, primer ingreso y cambio de contraseña
   grafica.js          Gráfica de barras apiladas (a tiempo, tarde, no surtido)
   vistas/
     plan.js           Plan de producción (aprobación de Gerencia, editar, rolar)
@@ -137,6 +141,7 @@ js/
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
   arranque.js         Inicia la app (va al final del orden de carga)
 supabase/migrations/  Esquema de la base de datos
+supabase/functions/   Edge Function sl-aprobar-acceso (crea la cuenta al aprobar)
 ```
 
 Los scripts comparten funciones y variables globales, así que el orden de los `<script>` en `index.html` importa: `arranque.js` siempre va al último.
