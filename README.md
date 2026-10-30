@@ -7,7 +7,7 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 ## Cómo se usa
 
-1. **Cuenta:** cada persona entra con su **correo y contraseña**. Quien no tiene cuenta la crea en **Crear cuenta** (nombre, número de gafete, correo y contraseña) y queda pendiente.
+1. **Cuenta:** cada persona entra con su **correo y contraseña**. El registro abierto está desactivado: el administrador crea la cuenta en Supabase (**Authentication → Users → Add user → Create new user**, con **Auto Confirm User**). Al entrar por primera vez, la persona captura su nombre y gafete y envía su solicitud.
 2. **Aprobación:** el administrador aprueba la solicitud en **Usuarios**, lo que liga la cuenta al gafete de la persona y le da un rol. El rol define qué pestañas ve. Si olvidas tu contraseña, **¿Olvidaste tu contraseña?** envía un enlace al correo.
 3. **Surtido:** el materialista o el líder de línea presiona **Confirmar surtido** y quien recibe en línea escanea su gafete. Con eso queda registrado quién surtió, quién recibió y a qué hora.
 
@@ -25,7 +25,7 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 ### 1. Primer administrador
 
-Crea tu cuenta en la app (**Crear cuenta**) y liga tu cuenta al gafete de administrador desde **SQL Editor** de Supabase (cambia el correo y el número de gafete):
+Crea tu cuenta en Supabase (**Authentication → Users → Add user**) y liga tu cuenta al gafete de administrador desde **SQL Editor** de Supabase (cambia el correo y el número de gafete):
 
 ```sql
 update public.sl_gafetes g
@@ -35,7 +35,7 @@ where u.email = 'tu-correo@empresa.com' and g.id = 'NUMERO_DE_GAFETE';
 delete from public.sl_solicitudes where email = 'tu-correo@empresa.com';
 ```
 
-A partir de ahí, el administrador aprueba las demás solicitudes en **Usuarios**.
+A partir de ahí, el administrador crea las cuentas en Supabase y aprueba las solicitudes en **Usuarios**. El registro abierto ("Allow new users to sign up") se mantiene desactivado porque el proyecto de Supabase lo comparte otra app.
 
 ### 2. Usuarios y permisos
 
@@ -46,7 +46,7 @@ A partir de ahí, el administrador aprueba las demás solicitudes en **Usuarios*
 
 ### 3. Correos de Supabase
 
-Los enlaces de confirmación y de recuperación de contraseña regresan a la app. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
+El enlace de recuperación de contraseña regresa a la app. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
 
 ## Cargas desde Excel
 
@@ -123,7 +123,7 @@ js/
   estado.js           Estado de la app, parámetros, roles y permisos
   calculo.js          Cálculo del programa de surtido (paros, reconteos, arranque)
   sesion.js           Navegación, menú y usuario en sesión
-  acceso.js           Inicio de sesión, registro, recuperar contraseña y solicitud de acceso
+  acceso.js           Inicio de sesión, recuperar contraseña y solicitud de acceso
   grafica.js          Gráfica de barras apiladas (a tiempo, tarde, no surtido)
   vistas/
     plan.js           Plan de producción (aprobación de Gerencia, editar, rolar)

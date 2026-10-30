@@ -1,6 +1,7 @@
 /* ===================== Acceso con correo y contraseña (Supabase Auth) =====================
-   Cada persona entra con su cuenta. Quien se registra deja una solicitud (sl_solicitudes) y entra cuando el
-   administrador la aprueba en Usuarios, que liga la cuenta a su gafete y le da un rol. */
+   El administrador crea las cuentas en Supabase (el registro abierto está desactivado). Con su cuenta, cada persona
+   envía una solicitud (sl_solicitudes) y entra cuando el administrador la aprueba en Usuarios, que liga la cuenta a
+   su gafete y le da un rol. */
 const authUrl=()=>location.origin+location.pathname;
 function authError(e){
   const m=String(e?.message||e||"");
@@ -15,7 +16,7 @@ function authError(e){
 }
 function authCard(inner){ return `<div class="login"><div class="card panel">${inner}</div></div>`; }
 function renderAuth(app,modo,aviso){
-  const links=[["login","Iniciar sesión"],["registro","Crear cuenta"],["olvido","¿Olvidaste tu contraseña?"]].filter(([k])=>k!==modo)
+  const links=[["login","Iniciar sesión"],["olvido","¿Olvidaste tu contraseña?"]].filter(([k])=>k!==modo)
     .map(([k,l])=>`<button type="button" class="btn ghost" data-auth="${k}" style="padding:2px 8px">${l}</button>`).join(" · ");
   const forms={
     login:`<div class="lbl">Surtido de Línea</div><h2>Inicia sesión</h2>
@@ -23,22 +24,13 @@ function renderAuth(app,modo,aviso){
         <div class="fld"><label for="a-email">Correo</label><input id="a-email" type="email" autocomplete="username" required></div>
         <div class="fld"><label for="a-pass">Contraseña</label><input id="a-pass" type="password" autocomplete="current-password" required></div>
         <button class="btn pri">Iniciar sesión</button></form>`,
-    registro:`<div class="lbl">Surtido de Línea</div><h2>Crea tu cuenta</h2>
-      <p class="muted">El administrador revisará tu solicitud y te dará acceso.</p>
-      <form id="f-auth" class="stack">
-        <div class="fld"><label for="a-nombre">Nombre</label><input id="a-nombre" autocomplete="name" required></div>
-        <div class="fld"><label for="a-gafete">Número de gafete</label><input id="a-gafete" autocomplete="off" inputmode="numeric" required></div>
-        <div class="fld"><label for="a-email">Correo</label><input id="a-email" type="email" autocomplete="username" required></div>
-        <div class="fld"><label for="a-pass">Contraseña</label><input id="a-pass" type="password" autocomplete="new-password" minlength="8" required></div>
-        <div class="fld"><label for="a-pass2">Repite la contraseña</label><input id="a-pass2" type="password" autocomplete="new-password" minlength="8" required></div>
-        <button class="btn pri">Crear cuenta</button></form>`,
     olvido:`<div class="lbl">Surtido de Línea</div><h2>Recupera tu contraseña</h2>
       <p class="muted">Te enviaremos un enlace a tu correo para crear una nueva.</p>
       <form id="f-auth" class="stack">
         <div class="fld"><label for="a-email">Correo</label><input id="a-email" type="email" autocomplete="username" required></div>
         <button class="btn pri">Enviar enlace</button></form>`
   };
-  app.innerHTML=authCard(`${forms[modo]}${aviso?`<p class="note" style="margin-top:14px">${aviso}</p>`:""}<div class="err" id="a-err"></div><p class="hint">${links}</p>`);
+  app.innerHTML=authCard(`${forms[modo]}${aviso?`<p class="note" style="margin-top:14px">${aviso}</p>`:""}<div class="err" id="a-err"></div><p class="hint">${links}</p>${modo==="login"?`<p class="hint">¿No tienes cuenta? Pide al administrador que la cree.</p>`:""}`);
   app.querySelectorAll("[data-auth]").forEach(b=>b.onclick=()=>renderAuth(app,b.dataset.auth));
   const f=document.getElementById("f-auth"), err=document.getElementById("a-err"), btn=f.querySelector("button.pri");
   f.querySelector("input").focus();
@@ -53,14 +45,6 @@ function renderAuth(app,modo,aviso){
         const {error}=await sb.resetPasswordForEmail(email,{redirectTo:authUrl()});
         if(error) throw error; return renderAuth(app,"login",`Si <b>${esc(email)}</b> tiene cuenta, te llegará un enlace para crear una nueva contraseña.`);
       }
-      const pass=document.getElementById("a-pass").value, nombre=ffv("a-nombre"), gafete=ffv("a-gafete");
-      if(pass!==document.getElementById("a-pass2").value) throw new Error("Las contraseñas no coinciden.");
-      const {data,error}=await sb.signUp({email,password:pass,options:{data:{nombre,gafete},emailRedirectTo:authUrl()}});
-      if(error) throw error;
-      // Un correo ya registrado regresa una cuenta sin identidades (Supabase no revela si existe).
-      if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length) throw new Error("already registered");
-      if(data.session){ await sendSolicitud(data.user,nombre,gafete); location.reload(); return; }
-      renderAuth(app,"login",`Te enviamos un correo a <b>${esc(email)}</b> para confirmar tu cuenta. Después de confirmarla, inicia sesión aquí.`);
     }catch(x){ err.textContent=authError(x); btn.disabled=false; }
   };
 }

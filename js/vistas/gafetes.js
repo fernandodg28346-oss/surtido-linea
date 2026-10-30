@@ -15,7 +15,7 @@ function viewGafetes(app){
   const us=all.filter(u=>!q||(u.gafete+" "+u.nombre+" "+(u.area||"")).toLowerCase().includes(q));
   const roleOpts=sel=>Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${sel===k?"selected":""}>${v.label}</option>`).join("");
   app.innerHTML=`
-  <div class="view-head"><div><h2>Usuarios</h2><p>Cada persona entra con su correo y contraseña: crea su cuenta y aquí apruebas su solicitud, que liga la cuenta a su gafete y le da un rol. Quien solo recibe material no necesita cuenta; basta con registrar su gafete.</p></div>
+  <div class="view-head"><div><h2>Usuarios</h2><p>Cada persona entra con su correo y contraseña. Crea su cuenta en Supabase (Authentication → Users → Add user); al entrar, la persona envía su solicitud y aquí la apruebas, lo que liga la cuenta a su gafete y le da un rol. Quien solo recibe material no necesita cuenta; basta con registrar su gafete.</p></div>
   <div class="row"><button class="btn" id="tpl-gaf">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-gaf" accept=".xlsx,.xls,.csv"></label></div></div>
   ${sols.length?`<div class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="ph"><h3>Solicitudes de acceso</h3><span class="pill p-warn">${sols.length}</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Gafete</th><th>Enviada</th><th></th></tr></thead>
@@ -31,7 +31,7 @@ function viewGafetes(app){
         <div class="fld"><label for="u-a">Área o línea</label><input id="u-a" list="dl-areas" placeholder="Ej. L1, Almacén"><datalist id="dl-areas">${lineasCat().map(l=>`<option value="${esc(l)}">`).join("")}</datalist></div>
         <div class="fld"><label for="u-r">Rol</label><select id="u-r">${roleOpts("receptor")}</select></div>
         <button class="btn pri">Registrar gafete</button>
-        <p class="small muted" style="margin:0">Para personas sin cuenta, como quien recibe material. Quien usa la app crea su cuenta y apruebas su solicitud arriba.</p></form></div></div>
+        <p class="small muted" style="margin:0">Para personas sin cuenta, como quien recibe material. Quien usa la app necesita una cuenta: créala en Supabase y aprueba su solicitud arriba.</p></form></div></div>
     </div>
     <div class="panel"><div class="ph"><h3>Gafetes registrados</h3>
       <div class="row"><input id="g-q" placeholder="Buscar gafete, nombre o área" value="${esc(S.sel.qGaf||"")}" aria-label="Buscar gafete"><span class="muted small">${us.length} de ${all.length}</span></div></div>
