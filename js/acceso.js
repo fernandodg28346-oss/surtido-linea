@@ -88,7 +88,8 @@ async function renderPending(app,session){
 }
 function renderNoAccess(app,g){
   app.innerHTML=authCard(`<div class="lbl">Sin acceso</div><h2>Tu cuenta no tiene acceso</h2>
-    <p class="muted">${esc(g.nombre)} está registrado solo para recibir material. Pide al administrador que te asigne otro rol en Usuarios.</p>
+    <p class="muted">${g.rol==="receptor"?`${esc(g.nombre)} está registrado solo para recibir material. Pide al administrador que te asigne otro rol en Usuarios.`
+      :`Tu rol (${esc(ROLES[g.rol]?.label||g.rol)}) no tiene ninguna pestaña habilitada. Pide al administrador que revise los permisos en Ajustes.`}</p>
     <button class="btn" id="a-out">Cerrar sesión</button>`);
   bindOut();
 }

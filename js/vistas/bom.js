@@ -1,6 +1,6 @@
 /* ===================== BOM ===================== */
 function viewBom(app){
-  const ed=can.editPlan();
+  const ed=can.editBom();
   const list=Object.values(S.bom).sort((a,b)=>a.ensamble.localeCompare(b.ensamble));
   if(!S.sel.bom||!S.bom[S.sel.bom]) S.sel.bom=list[0]?._id||null;
   const cur=S.sel.bom?S.bom[S.sel.bom]:null;
