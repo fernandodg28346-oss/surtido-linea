@@ -50,7 +50,7 @@ A partir de ahí, el administrador aprueba las solicitudes en **Usuarios**. El r
 
 ### 3. Correos de Supabase
 
-El enlace de "¿Olvidaste tu contraseña?" regresa a la app. El servicio de correo incluido en Supabase solo envía a los miembros del equipo del proyecto; para que llegue a todo el personal hace falta configurar un SMTP propio. Mientras tanto, el administrador puede dar una contraseña nueva quitando el acceso y aprobando una nueva solicitud, y cada quien puede cambiar la suya con **Contraseña**. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
+El enlace de "¿Olvidaste tu contraseña?" regresa a la app. El servicio de correo incluido en Supabase solo envía a los miembros del equipo del proyecto; para que llegue a todo el personal hace falta configurar un SMTP propio. Con la sesión abierta, cada quien puede cambiar la suya con **Contraseña**. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
 
 ## Cargas desde Excel
 
