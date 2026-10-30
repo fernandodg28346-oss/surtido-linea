@@ -6,6 +6,7 @@ function authError(e){
   const m=String(e?.message||e||"");
   if(/invalid login credentials/i.test(m)) return "Correo o contraseña incorrectos.";
   if(/email not confirmed/i.test(m)) return "Tu correo aún no está confirmado. Abre el enlace que te enviamos y vuelve a intentarlo.";
+  if(/signups not allowed|signup_disabled/i.test(m)) return "El registro de cuentas nuevas está desactivado. Pide al administrador que active el registro o que cree tu cuenta.";
   if(/already registered|already exists/i.test(m)) return "Ese correo ya tiene cuenta. Inicia sesión con tu contraseña.";
   if(/password should be at least|weak password/i.test(m)) return "La contraseña es muy corta o muy simple. Usa al menos 8 caracteres.";
   if(/for security purposes|rate limit|too many/i.test(m)) return "Demasiados intentos. Espera un momento y vuelve a intentarlo.";
