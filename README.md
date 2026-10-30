@@ -13,7 +13,7 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 | Rol | Acceso |
 |---|---|
-| Administrador | Todo, incluidos Reportes, Gafetes y ajustes |
+| Administrador | Todo, incluidos Reportes, Gafetes y Ajustes |
 | Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas, Reportes |
 | Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas, Reportes |
 | Materialista | Líneas y Surtido (confirma surtidos) |
@@ -50,7 +50,8 @@ Al abrir la app con un equipo autorizado y sin gafetes registrados, la app pide 
 
 Cada sección tiene un botón **Plantilla Excel** con las columnas esperadas:
 
-- **Plan:** Fecha, Ensamble, WO (obligatoria, p. ej. `CTI002647`), Cantidad, Turno, Linea, UPH, Arranque (opcional: `turno` o `manual`)
+- **Plan:** Fecha, Ensamble, WO (obligatoria, p. ej. `CTI002647`), Cantidad, Turno, Linea (del catálogo, si hay), UPH
+- **Líneas** (Ajustes): Linea, Descripcion
 - **BOM:** Ensamble, NP, Descripcion, Estacion, CantidadPorUnidad, Empaque, UPH (opcional; normalmente va en el plan)
 - **Gafetes:** Gafete, Nombre, Area, Rol (`admin`, `planeador`, `gerente`, `materialista`, `lider`, `supervisor`, `receptor`)
 
@@ -59,11 +60,15 @@ Cada sección tiene un botón **Plantilla Excel** con las columnas esperadas:
 Para cada NP en su estación:
 
 - Consumo por hora = UPH del plan × cantidad por unidad del BOM (si el plan no trae UPH, se usa el del BOM)
-- Punto de reorden = empaque × % de reorden (mínimo 20 %, se ajusta en Gafetes y ajustes)
+- Punto de reorden = empaque × % de reorden (mínimo 20 %, se ajusta en Ajustes)
 - Cantidad a surtir = empaque − punto de reorden
 - Frecuencia = cantidad a surtir ÷ consumo por hora
 
-El primer surtido es al arranque del ensamble, con la estación llena. Una línea está **al 100 %** cuando todos los surtidos cuya hora ya pasó están confirmados.
+El surtido de cada ensamble arranca cuando alguien presiona **Iniciar ensamble** en Surtido; el primer surtido es a esa hora, con la estación llena. Una línea está **al 100 %** cuando todos los surtidos cuya hora ya pasó están confirmados.
+
+## Catálogo de líneas
+
+En **Ajustes → Catálogo de líneas** el administrador da de alta las líneas (a mano o desde Excel, con descripción opcional). En el plan de producción la línea se elige de esa lista, también al editar; la carga de Excel del plan ignora las filas con una línea fuera del catálogo. Mientras el catálogo esté vacío, la línea se escribe a mano. Quitar una línea del catálogo no cambia los planes que ya la usan.
 
 ## Work order (WO)
 
@@ -77,7 +82,7 @@ Cada ensamble del plan lleva su WO, obligatoria al agregarlo (a mano o por Excel
 
 ## Anticipación y aprobación del plan
 
-El plan se postea con anticipación al **inicio del turno** del plan: 24 horas por defecto. El administrador lo cambia en **Gafetes y ajustes → Anticipación del plan (horas)**; con 0 no se pide aprobación.
+El plan se postea con anticipación al **inicio del turno** del plan: 24 horas por defecto. El administrador lo cambia en **Ajustes → Anticipación del plan (horas)**; con 0 no se pide aprobación.
 
 - Altas, cambios (**Editar**: cantidad, UPH, turno, línea) y bajas (**Quitar**) de un plan cuyo turno inicia dentro de ese plazo, o ya inició, se envían a **aprobación de Gerencia**. Con 24 h y el T1 a las 07:00, el plan del T1 de mañana entra directo si se postea antes de hoy a las 07:00. Al editar, cambiar a un turno que inicia dentro del plazo también requiere aprobación.
 - Mientras está pendiente, el plan vigente no cambia y un alta pendiente no genera surtidos.
@@ -92,7 +97,7 @@ Esta regla la aplica la app según el gafete con el que se entra, igual que los 
 En la pestaña **Surtido**, el panel **Control de línea** y cada NP tienen estas opciones (admin, planeador, materialista y líder de línea):
 
 - **Línea detenida / Reanudar línea:** mientras la línea está detenida, los surtidos siguientes quedan en pausa y no se pueden confirmar. Al reanudar, los pendientes se recorren el tiempo que estuvo detenida. También está en cada tarjeta de **Líneas**.
-- **Iniciar ensamble:** un ensamble con arranque **manual** no genera surtidos hasta que alguien lo inicia; el primer surtido queda a esa hora. Si un ensamble con arranque al inicio del turno no arrancó (y aún no tiene surtidos confirmados), **No ha arrancado** lo deja en espera.
+- **Iniciar ensamble:** ningún ensamble genera surtidos hasta que alguien lo inicia; el primer surtido queda a esa hora. (Los planes anteriores a este cambio que arrancaban al inicio del turno conservan ese arranque; si alguno no arrancó y aún no tiene surtidos confirmados, **No ha arrancado** lo deja en espera.)
 - **Recontar material:** cuando otra área entrega material (purga, etc.) o el conteo no coincide, se captura lo que realmente hay en la estación. Los surtidos confirmados se conservan y los pendientes se recalculan con lo contado: el siguiente surtido es cuando lo contado baja al punto de reorden, y el total por surtir se reduce en lo que ya estaba en la estación.
 
 Los paros y reconteos se guardan en `sl_eventos` y aparecen en **Métricas → Paros y reconteos**. No se borran desde la app; un reconteo equivocado se corrige con otro reconteo.
@@ -124,7 +129,8 @@ js/
     surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
     metricas.js       Métricas por fecha: por turno, por línea, tardías y bitácoras
     reportes.js       Reportes por periodo con descarga a Excel o CSV
-    gafetes.js        Gafetes y parámetros
+    gafetes.js        Registro de gafetes y roles
+    ajustes.js        Parámetros de surtido y catálogo de líneas
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
   arranque.js         Inicia la app (va al final del orden de carga)
 supabase/migrations/  Esquema de la base de datos
