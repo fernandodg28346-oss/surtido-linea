@@ -1,12 +1,17 @@
 /* ===================== Usuarios (gafetes) ===================== */
-// Solicitudes de acceso pendientes (sl_solicitudes_acceso), en vivo mientras el administrador las ve.
-let solWatch=null;
+// Solicitudes de acceso pendientes (sl_solicitudes_acceso). Se recargan con cada cambio en tiempo real, al entrar
+// a Usuarios, cada 20 s mientras se ve la pantalla, y justo después de aprobar o rechazar.
+let solWatch=null, solAt=0;
+async function loadSolicitudes(forzar){
+  const {data,error}=await Store.sb.from("sl_solicitudes_acceso").select("*").eq("estado","pendiente").order("creado");
+  S.solicitudes=error?[]:data; solAt=Date.now();
+  if(S.view==="gafetes") render(!forzar);
+}
 function watchSolicitudes(){
+  if(Date.now()-solAt>20000) loadSolicitudes();
   if(solWatch) return;
-  const load=async()=>{ const {data,error}=await Store.sb.from("sl_solicitudes_acceso").select("*").eq("estado","pendiente").order("creado");
-    S.solicitudes=error?[]:data; if(S.view==="gafetes") render(true); };
-  solWatch=Store.sb.channel("sl_sol_"+newId()).on("postgres_changes",{event:"*",schema:"public",table:"sl_solicitudes_acceso"},load).subscribe();
-  load();
+  solWatch=Store.sb.channel("sl_sol_"+newId()).on("postgres_changes",{event:"*",schema:"public",table:"sl_solicitudes_acceso"},()=>loadSolicitudes()).subscribe();
+  setInterval(()=>{ if(S.view==="gafetes") loadSolicitudes(); },20000);
 }
 function viewGafetes(app){
   watchSolicitudes();
@@ -67,7 +72,7 @@ function viewGafetes(app){
   app.querySelectorAll("[data-aprobar-sol]").forEach(b=>b.onclick=()=>openApprove(sols.find(s=>s.id===b.dataset.aprobarSol)));
   app.querySelectorAll("[data-rechazar-sol]").forEach(b=>b.onclick=()=>{ const s=sols.find(x=>x.id===b.dataset.rechazarSol);
     confirmBox(`¿Rechazar la solicitud de ${s.nombre} (${s.email})? Podrá volver a enviarla.`,"Rechazar",async()=>{
-      if(await safeWrite(async()=>{ const {error}=await Store.sb.from("sl_solicitudes_acceso").update({estado:"rechazada",revisado:new Date().toISOString(),revisado_por:Store.email}).eq("id",s.id); if(error) throw error; })) toast("Solicitud rechazada."); }); });
+      if(await safeWrite(async()=>{ const {error}=await Store.sb.from("sl_solicitudes_acceso").update({estado:"rechazada",revisado:new Date().toISOString(),revisado_por:Store.email}).eq("id",s.id); if(error) throw error; })) toast("Solicitud rechazada."); loadSolicitudes(true); }); });
   app.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=()=>{const u=S.gafetes[b.dataset.delUser]; confirmBox(`¿Dar de baja a ${u.nombre}?`,"Dar de baja",()=>safeWrite(()=>Store.del("gafetes",u._id)));});
 }
 
@@ -104,8 +109,13 @@ function openApprove(sol){
     if(cur?.user_id&&cur.email&&cur.email.toLowerCase()!==sol.email.toLowerCase()) return err(`El gafete ${body.gafete} ya está ligado a la cuenta ${cur.email}.`);
     const btn=e.target.querySelector("button.ok"); btn.disabled=true; err("");
     const {data,error}=await Store.sb.functions.invoke("sl-aprobar-acceso",{body});
-    if(error){ let m=error.message; try{ m=(await error.context.json()).error||m; }catch(x){} btn.disabled=false; return err(m); }
-    showCredentials(body,sol.email,data.existente);
+    if(error){
+      let m=error.message, st=0; try{ st=error.context.status; m=(await error.context.json()).error||m; }catch(x){}
+      // La solicitud cambió mientras estaba abierta (aprobada, rechazada o reenviada): se cierra y se muestra la lista al día.
+      if(st===404){ close(); toast("Esa solicitud ya no estaba pendiente; la lista se actualizó."); return loadSolicitudes(true); }
+      btn.disabled=false; return err(m);
+    }
+    showCredentials(body,sol.email,data.existente); loadSolicitudes();
   };
 }
 function showCredentials(b,email,existente){
@@ -119,7 +129,7 @@ function showCredentials(b,email,existente){
           Correo: <b class="mono">${esc(email)}</b><br>Contraseña inicial: <b class="mono" id="cr-p">${esc(b.password)}</b></div>`}
       <div class="row" style="justify-content:flex-end">${existente?"":`<button class="btn" id="cr-copy">Copiar datos</button>`}<button class="btn pri" id="cr-ok">Listo</button></div>
     </div></div></div>`;
-  document.getElementById("cr-ok").onclick=()=>root.innerHTML="";
+  document.getElementById("cr-ok").onclick=()=>{ root.innerHTML=""; loadSolicitudes(true); };
   const cp=document.getElementById("cr-copy");
   if(cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(`Surtido de Línea\nCorreo: ${email}\nContraseña inicial: ${b.password}`); toast("Datos copiados."); }catch(x){ toast("No se pudo copiar; anótalos."); } };
 }
