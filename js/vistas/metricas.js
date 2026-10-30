@@ -35,7 +35,8 @@ function metRangeData(desde,hasta){
 
 function viewMetricas(app){
   const c=cfg(), now=Date.now();
-  const M=S.met=S.met||{modo:"dia",semana:isoWeek(today()),desde:addDays(today(),-6),hasta:today(),linea:""};
+  const M=S.met=S.met||{modo:"dia",semana:isoWeek(today()),desde:addDays(today(),-6),hasta:today(),linea:"",sub:"resumen",rep:"cumplimiento"};
+  const esRep=M.sub==="reportes";
   const per=M.modo==="dia"?{desde:S.sel.fecha,hasta:S.sel.fecha}:M.modo==="semana"?weekDates(M.semana):{desde:M.desde,hasta:M.hasta};
   const dias=per&&per.desde<=per.hasta?datesBetween(per.desde,per.hasta):[], rangoOk=dias.length>0&&dias.length<=MAX_DIAS;
   const lineas=[...new Set([...lineasCat(),...Object.values(S.plan).map(p=>p.linea)])].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
@@ -51,8 +52,20 @@ function viewMetricas(app){
     <div class="fld"><label for="m-turno">Turno</label><select id="m-turno"><option value="">Todos</option>${Object.keys(c.turnos).map(t=>`<option ${S.sel.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
     <div class="fld"><label for="m-linea">Línea</label><select id="m-linea"><option value="">Todas</option>${lineas.map(l=>`<option ${M.linea===l?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
   </div>`;
-  const head=`<div class="view-head"><div><h2>Métricas de surtido</h2><p>Cumplimiento contra el programa calculado del plan. "A tiempo" = confirmado dentro de ${c.tolerancia} min de la hora programada; "No surtido" = ya tocaba y no se confirmó.</p></div></div>`;
-  if(!src){ app.innerHTML=head+filtros+`<div class="panel empty">${esc(msg)}</div>`; bindMetricas(M); return; }
+  const rep=src&&esRep?buildReport({desde:per.desde,hasta:per.hasta,turno:S.sel.turno,linea:M.linea,tipo:M.rep,data:src},dias):null;
+  const head=`<div class="view-head"><div><h2>Métricas y reportes</h2><p>Cumplimiento contra el programa calculado del plan. "A tiempo" = confirmado dentro de ${c.tolerancia} min de la hora programada; "No surtido" = ya tocaba y no se confirmó.</p></div>
+    ${esRep?`<div class="row"><button class="btn" id="rp-xlsx" ${rep&&rep.rows.length?"":"disabled"}>Descargar Excel</button><button class="btn" id="rp-csv" ${rep&&rep.rows.length?"":"disabled"}>Descargar CSV</button></div>`:""}</div>
+  <div class="seg" role="tablist" aria-label="Sección" style="margin-bottom:16px">${[["resumen","Resumen"],["reportes","Reportes"]].map(([k,l])=>`<button role="tab" data-sub="${k}" aria-selected="${M.sub===k}">${l}</button>`).join("")}</div>`;
+  const filtrosRep=esRep?filtros.replace('<div class="filters">',`<div class="filters"><div class="fld"><label for="rp-tipo">Reporte</label><select id="rp-tipo">${Object.entries(REPORTES).map(([k,v])=>`<option value="${k}" ${M.rep===k?"selected":""}>${v}</option>`).join("")}</select></div>`):filtros;
+  if(!src){ app.innerHTML=head+filtrosRep+`<div class="panel empty">${esc(msg)}</div>`; bindMetricas(M); return; }
+  if(esRep){
+    app.innerHTML=head+filtrosRep+(rep.chart?`<div class="panel" style="margin-bottom:16px"><div class="ph"><h3>${esc(rep.chartTitle)}</h3></div><div class="pb">${rep.chart}</div></div>`:"")+reportTable(rep,M.rep);
+    bindMetricas(M);
+    const name=`reporte_${M.rep}_${per.desde}_a_${per.hasta}`, aoa=()=>[rep.cols.map(x=>x.h),...rep.rows];
+    document.getElementById("rp-xlsx").onclick=()=>downloadXlsx(name+".xlsx",aoa());
+    document.getElementById("rp-csv").onclick=()=>downloadCsv(name+".csv",aoa());
+    return;
+  }
 
   const okF=x=>(!S.sel.turno||x.turno===S.sel.turno)&&(!M.linea||x.linea===M.linea);
   const porDia={}, evDia={};
@@ -117,4 +130,6 @@ function bindMetricas(M){
   on("m-hasta",v=>{ if(v) M.hasta=v; });
   on("m-turno",v=>S.sel.turno=v);
   on("m-linea",v=>M.linea=v);
+  on("rp-tipo",v=>M.rep=v);
+  document.querySelectorAll("[data-sub]").forEach(b=>b.onclick=()=>{ M.sub=b.dataset.sub; render(); });
 }

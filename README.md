@@ -15,12 +15,12 @@ Estos son los permisos por defecto; el administrador los ajusta en **Ajustes →
 
 | Rol | Acceso |
 |---|---|
-| Administrador | Todo, incluidos Reportes, Usuarios y Ajustes |
-| Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas, Reportes |
-| Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas, Reportes |
+| Administrador | Todo, incluidos Usuarios y Ajustes |
+| Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas y reportes |
+| Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas y reportes |
 | Materialista | Líneas y Surtido (confirma surtidos) |
-| Líder de línea | Líneas, Surtido (confirma surtidos), Métricas, Reportes |
-| Supervisor | Líneas, Métricas, Reportes, Surtido, Plan (consulta) |
+| Líder de línea | Líneas, Surtido (confirma surtidos), Métricas y reportes |
+| Supervisor | Líneas, Métricas y reportes, Surtido, Plan (consulta) |
 | Recibe material | No entra a la app; solo su gafete se usa para recibir |
 
 ## Puesta en marcha
@@ -76,7 +76,7 @@ El surtido de cada ensamble arranca cuando alguien presiona **Iniciar ensamble**
 
 ## Permisos por rol
 
-En **Ajustes → Permisos por rol** el administrador decide qué pestañas ve cada rol (Líneas, Surtido, Plan de producción, BOM, Métricas, Reportes) y qué acciones puede hacer: modificar el plan, aprobar cambios al plan, editar el BOM, confirmar surtidos, y paros/reconteos/inicio de ensamble. Se guardan en `sl_config` (documento `permisos`) y solo el administrador puede cambiarlos (lo valida la base).
+En **Ajustes → Permisos por rol** el administrador decide qué pestañas ve cada rol (Líneas, Surtido, Plan de producción, BOM, Métricas y reportes) y qué acciones puede hacer: modificar el plan, aprobar cambios al plan, editar el BOM, confirmar surtidos, y paros/reconteos/inicio de ensamble. Se guardan en `sl_config` (documento `permisos`) y solo el administrador puede cambiarlos (lo valida la base).
 
 - El administrador siempre tiene todo y es el único con **Usuarios** y **Ajustes**; "Recibe material" no entra a la app.
 - Dar una acción también da su pestaña; quitar una pestaña quita las acciones que dependen de ella.
@@ -93,8 +93,10 @@ Cada ensamble del plan lleva su WO, obligatoria al agregarlo (a mano o por Excel
 
 ## Métricas y reportes
 
-- **Métricas**: periodo por **día** (en vivo), **semana** (lunes a domingo, últimas 26 semanas) o **rango de fechas** (hasta 62 días), con filtros de turno y **línea**. Cumplimiento, gráfica por día (en semana o rango), gráfica y resumen **por turno** y **por línea** (a tiempo, tarde, no surtidos), por materialista, **entregas tardías** ordenadas por retraso, y bitácoras de surtidos, paros y reconteos.
-- **Reportes** (periodo de hasta 62 días, con filtros de turno y línea): cumplimiento por día y turno (con gráfica de barras por día), surtidos confirmados, entregas tardías, paros y reconteos, y plan de producción con WO. Cada reporte se descarga completo en **Excel** o **CSV**.
+Una sola pestaña con dos secciones que comparten los filtros: periodo por **día** (en vivo), **semana** (lunes a domingo, últimas 26 semanas) o **rango de fechas** (hasta 62 días), **turno** y **línea**.
+
+- **Resumen:** cumplimiento, % a tiempo, no surtidos y retraso promedio; gráfica por día (en semana o rango); gráfica y resumen **por turno** y **por línea** (a tiempo, tarde, no surtidos); por materialista; **entregas tardías** ordenadas por retraso; bitácoras de surtidos, paros y reconteos.
+- **Reportes:** cumplimiento por día y turno (con gráfica por día), surtidos confirmados, entregas tardías, paros y reconteos, y plan de producción con WO. Cada reporte se descarga completo en **Excel** o **CSV** con los filtros aplicados.
 - "Tarde" = confirmado después de la tolerancia (10 min por defecto); "No surtido" = ya tocaba y no se confirmó.
 
 ## Anticipación y aprobación del plan
@@ -145,8 +147,8 @@ js/
     bom.js            BOM por ensamble
     lineas.js         Estado de líneas
     surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
-    metricas.js       Métricas por día, semana o rango: por turno, por línea, tardías y bitácoras
-    reportes.js       Reportes por periodo con descarga a Excel o CSV
+    metricas.js       Métricas y reportes: filtros de periodo, Resumen y Reportes
+    reportes.js       Reportes de la sección Reportes de Métricas (tabla y descarga a Excel o CSV)
     gafetes.js        Usuarios: solicitudes de acceso, gafetes y roles
     ajustes.js        Parámetros de surtido, catálogo de líneas y permisos por rol
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel

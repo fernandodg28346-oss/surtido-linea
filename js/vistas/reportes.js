@@ -1,6 +1,6 @@
-/* ===================== Reportes =====================
-   Rango de fechas (hasta 62 días) con exportación a Excel o CSV. Los surtidos y eventos del rango se leen
-   al cambiar las fechas; el cumplimiento se recalcula día por día con el mismo motor del surtido (dayTrips). */
+/* ===================== Reportes (sección de Métricas y reportes) =====================
+   Construye cada reporte del periodo y filtros de Métricas, para verlo en tabla y descargarlo en Excel o CSV.
+   El cumplimiento se recalcula día por día con el mismo motor del surtido (dayTrips). */
 const REPORTES={
   cumplimiento:"Cumplimiento por día y turno",
   surtidos:"Surtidos confirmados",
@@ -15,49 +15,12 @@ const fmtDia=f=>new Date(f+"T00:00:00").toLocaleDateString("es-MX",{day:"numeric
 const fmtHora=ts=>ts?fmtT(new Date(ts)):"";
 const isLate=r=>r.ts-r.programado>cfg().tolerancia*60000;
 
-function viewReportes(app){
-  const R=S.rep=S.rep||{hasta:today(),desde:addDays(today(),-6),tipo:"cumplimiento",turno:"",linea:"",key:null,data:null,loading:false,error:""};
-  const c=cfg(), dias=datesBetween(R.desde,R.hasta), rangoOk=R.desde<=R.hasta&&dias.length<=MAX_DIAS;
-  const key=R.desde+"|"+R.hasta;
-  if(rangoOk&&R.key!==key&&!R.loading){
-    R.loading=true; R.error="";
-    Promise.all([Store.fetchRange("surtidos","fecha",R.desde,R.hasta),Store.fetchRange("eventos","fecha",R.desde,R.hasta)])
-      .then(([surtidos,eventos])=>{ R.data={surtidos,eventos}; R.key=key; })
-      .catch(e=>{ R.error="No se pudieron leer los datos ("+(e.message||e.code)+")."; R.key=key; R.data=null; })
-      .finally(()=>{ R.loading=false; if(S.view==="reportes") render(); });
-  }
-  const lineas=[...new Set(Object.values(S.plan).map(p=>p.linea))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
-  const rep=rangoOk&&R.data&&R.key===key&&!R.loading?buildReport(R,dias):null;
-  app.innerHTML=`
-  <div class="view-head"><div><h2>Reportes</h2><p>Elige el periodo y el reporte. Se descarga completo en Excel o CSV con los filtros aplicados. "Tarde" = confirmado después de ${c.tolerancia} min de la hora programada.</p></div>
-    <div class="row"><button class="btn" id="rp-xlsx" ${rep&&rep.rows.length?"":"disabled"}>Descargar Excel</button><button class="btn" id="rp-csv" ${rep&&rep.rows.length?"":"disabled"}>Descargar CSV</button></div></div>
-  <div class="filters">
-    <div class="fld"><label for="rp-tipo">Reporte</label><select id="rp-tipo">${Object.entries(REPORTES).map(([k,v])=>`<option value="${k}" ${R.tipo===k?"selected":""}>${v}</option>`).join("")}</select></div>
-    <div class="fld"><label for="rp-desde">Desde</label><input type="date" id="rp-desde" value="${R.desde}"></div>
-    <div class="fld"><label for="rp-hasta">Hasta</label><input type="date" id="rp-hasta" value="${R.hasta}"></div>
-    <div class="fld"><label for="rp-turno">Turno</label><select id="rp-turno"><option value="">Todos</option>${Object.keys(c.turnos).map(t=>`<option ${R.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
-    <div class="fld"><label for="rp-linea">Línea</label><select id="rp-linea"><option value="">Todas</option>${lineas.map(l=>`<option ${R.linea===l?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
-    <div class="row" style="gap:6px">${[["Hoy",0],["7 días",6],["30 días",29]].map(([l,n])=>`<button class="btn ghost" data-rango="${n}">${l}</button>`).join("")}</div>
-  </div>
-  ${!rangoOk?`<div class="panel empty">${R.desde>R.hasta?"La fecha inicial debe ser anterior o igual a la final.":`Elige un periodo de hasta ${MAX_DIAS} días.`}</div>`
-   :R.error?`<div class="panel empty" style="color:var(--bad)">${esc(R.error)}</div>`
-   :!rep?`<div class="panel empty">Cargando datos del periodo…</div>`
-   :`${rep.kpis||""}${rep.chart?`<div class="panel" style="margin-bottom:16px"><div class="ph"><h3>${esc(rep.chartTitle)}</h3></div><div class="pb">${rep.chart}</div></div>`:""}
-    <div class="panel"><div class="ph"><h3>${esc(REPORTES[R.tipo])}</h3><span class="muted small">${fmtN(rep.rows.length)} registro${rep.rows.length===1?"":"s"}${rep.rows.length>300?" · se muestran 300; la descarga trae todos":""}</span></div>
-      <div class="tbl-wrap"><table><thead><tr>${rep.cols.map(c=>`<th class="${c.num?"num":""}">${esc(c.h)}</th>`).join("")}</tr></thead>
-      <tbody>${rep.rows.length?rep.rows.slice(0,300).map(r=>`<tr>${r.map((v,i)=>`<td class="${rep.cols[i].num?"num":rep.cols[i].mono?"mono":""}">${rep.cols[i].fmt?rep.cols[i].fmt(v):esc(v)}</td>`).join("")}</tr>`).join("")
-        :`<tr><td colspan="${rep.cols.length}" class="empty">Sin registros en este periodo con los filtros elegidos.</td></tr>`}</tbody></table></div></div>`}`;
-  const set=(k,v)=>{ R[k]=v; render(); };
-  document.getElementById("rp-tipo").onchange=e=>set("tipo",e.target.value);
-  document.getElementById("rp-desde").onchange=e=>set("desde",e.target.value||R.desde);
-  document.getElementById("rp-hasta").onchange=e=>set("hasta",e.target.value||R.hasta);
-  document.getElementById("rp-turno").onchange=e=>set("turno",e.target.value);
-  document.getElementById("rp-linea").onchange=e=>set("linea",e.target.value);
-  app.querySelectorAll("[data-rango]").forEach(b=>b.onclick=()=>{ R.hasta=today(); R.desde=addDays(R.hasta,-Number(b.dataset.rango)); render(); });
-  if(!rep) return;
-  const name=`reporte_${R.tipo}_${R.desde}_a_${R.hasta}`, aoa=()=>[rep.cols.map(c=>c.h),...rep.rows];
-  document.getElementById("rp-xlsx").onclick=()=>downloadXlsx(name+".xlsx",aoa());
-  document.getElementById("rp-csv").onclick=()=>downloadCsv(name+".csv",aoa());
+// Tabla de un reporte (se muestran 300 filas; la descarga trae todas).
+function reportTable(rep,tipo){
+  return `<div class="panel"><div class="ph"><h3>${esc(REPORTES[tipo])}</h3><span class="muted small">${fmtN(rep.rows.length)} registro${rep.rows.length===1?"":"s"}${rep.rows.length>300?" · se muestran 300; la descarga trae todos":""}</span></div>
+    <div class="tbl-wrap"><table><thead><tr>${rep.cols.map(c=>`<th class="${c.num?"num":""}">${esc(c.h)}</th>`).join("")}</tr></thead>
+    <tbody>${rep.rows.length?rep.rows.slice(0,300).map(r=>`<tr>${r.map((v,i)=>`<td class="${rep.cols[i].num?"num":rep.cols[i].mono?"mono":""}">${rep.cols[i].fmt?rep.cols[i].fmt(v):esc(v)}</td>`).join("")}</tr>`).join("")
+      :`<tr><td colspan="${rep.cols.length}" class="empty">Sin registros en este periodo con los filtros elegidos.</td></tr>`}</tbody></table></div></div>`;
 }
 
 function buildReport(R,dias){
