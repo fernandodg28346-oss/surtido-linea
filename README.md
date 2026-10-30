@@ -13,12 +13,12 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 | Rol | Acceso |
 |---|---|
-| Administrador | Todo, incluidos Gafetes y ajustes |
-| Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas |
-| Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas |
+| Administrador | Todo, incluidos Reportes, Gafetes y ajustes |
+| Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas, Reportes |
+| Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas, Reportes |
 | Materialista | Líneas y Surtido (confirma surtidos) |
-| Líder de línea | Líneas, Surtido (confirma surtidos), Métricas |
-| Supervisor | Líneas, Métricas, Surtido, Plan (consulta) |
+| Líder de línea | Líneas, Surtido (confirma surtidos), Métricas, Reportes |
+| Supervisor | Líneas, Métricas, Reportes, Surtido, Plan (consulta) |
 | Recibe material | No entra a la app; solo su gafete se usa para recibir |
 
 ## Puesta en marcha
@@ -50,7 +50,7 @@ Al abrir la app con un equipo autorizado y sin gafetes registrados, la app pide 
 
 Cada sección tiene un botón **Plantilla Excel** con las columnas esperadas:
 
-- **Plan:** Fecha, Ensamble, Cantidad, Turno, Linea, UPH, Arranque (opcional: `turno` o `manual`)
+- **Plan:** Fecha, Ensamble, WO (obligatoria, p. ej. `CTI002647`), Cantidad, Turno, Linea, UPH, Arranque (opcional: `turno` o `manual`)
 - **BOM:** Ensamble, NP, Descripcion, Estacion, CantidadPorUnidad, Empaque, UPH (opcional; normalmente va en el plan)
 - **Gafetes:** Gafete, Nombre, Area, Rol (`admin`, `planeador`, `gerente`, `materialista`, `lider`, `supervisor`, `receptor`)
 
@@ -64,6 +64,16 @@ Para cada NP en su estación:
 - Frecuencia = cantidad a surtir ÷ consumo por hora
 
 El primer surtido es al arranque del ensamble, con la estación llena. Una línea está **al 100 %** cuando todos los surtidos cuya hora ya pasó están confirmados.
+
+## Work order (WO)
+
+Cada ensamble del plan lleva su WO, obligatoria al agregarlo (a mano o por Excel) y editable con **Editar**: letras y números, con guion opcional, de 4 a 20 caracteres (p. ej. `CTI002647`); se guarda en mayúsculas. La WO aparece en el plan, en cada surtido, en las métricas y en los reportes, y queda guardada en cada surtido confirmado. Las filas de Excel sin WO válida se ignoran.
+
+## Métricas y reportes
+
+- **Métricas** (por fecha): cumplimiento, gráfica y resumen **por turno** (a tiempo, tarde, no surtidos), por línea, por materialista, **entregas tardías** ordenadas por retraso, y bitácoras de surtidos, paros y reconteos.
+- **Reportes** (periodo de hasta 62 días, con filtros de turno y línea): cumplimiento por día y turno (con gráfica de barras por día), surtidos confirmados, entregas tardías, paros y reconteos, y plan de producción con WO. Cada reporte se descarga completo en **Excel** o **CSV**.
+- "Tarde" = confirmado después de la tolerancia (10 min por defecto); "No surtido" = ya tocaba y no se confirmó.
 
 ## Anticipación y aprobación del plan
 
@@ -106,12 +116,14 @@ js/
   estado.js           Estado de la app, parámetros, roles y permisos
   calculo.js          Cálculo del programa de surtido (paros, reconteos, arranque)
   sesion.js           Sesión del equipo, gafete, menú y navegación
+  grafica.js          Gráfica de barras apiladas (a tiempo, tarde, no surtido)
   vistas/
     plan.js           Plan de producción (aprobación de Gerencia, editar, rolar)
     bom.js            BOM por ensamble
     lineas.js         Estado de líneas
     surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
-    metricas.js       Métricas y bitácoras
+    metricas.js       Métricas por fecha: por turno, por línea, tardías y bitácoras
+    reportes.js       Reportes por periodo con descarga a Excel o CSV
     gafetes.js        Gafetes y parámetros
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
   arranque.js         Inicia la app (va al final del orden de carga)
