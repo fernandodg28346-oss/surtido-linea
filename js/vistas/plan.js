@@ -6,6 +6,15 @@ const PLAN_CAMPOS={wo:"WO",cantidad:"Cantidad",uph:"UPH",turno:"Turno",linea:"L�
 // Work order del ensamble, p. ej. CTI002647: letras y números (guion permitido), 4 a 20 caracteres, en mayúsculas.
 const normWO=v=>String(v??"").trim().toUpperCase();
 const validWO=v=>/^[A-Z0-9][A-Z0-9-]{3,19}$/.test(v);
+// Línea: lista del catálogo de Ajustes (conserva el valor actual aunque ya no esté); sin catálogo, texto libre.
+function lineField(id,cur){
+  const cat=lineasCat();
+  if(!cat.length) return `<input id="${id}" class="w-s" value="${esc(cur||"")}" required title="Agrega líneas en Ajustes para elegirlas de una lista">`;
+  const opts=cur&&!cat.includes(cur)?[cur,...cat]:cat;
+  return `<select id="${id}" required>${cur?"":`<option value="">Elige…</option>`}${opts.map(l=>`<option ${l===cur?"selected":""}>${esc(l)}</option>`).join("")}</select>`;
+}
+// Con catálogo, la línea de un Excel debe existir en él (sin importar mayúsculas); regresa el nombre del catálogo o "".
+function catalogLine(v){ const cat=lineasCat(); if(!cat.length) return v; return cat.find(l=>l.toUpperCase()===String(v).toUpperCase())||""; }
 const PEND_LABEL={alta:"Alta",cambio:"Cambio",baja:"Baja"};
 function hoursAhead(p){ return (shiftStart(p.fecha,p.turno).getTime()-Date.now())/3600000; }
 // Rolar: un plan posteado en tiempo y forma (creado con la anticipación requerida respecto a su turno original)
@@ -52,7 +61,7 @@ function viewPlan(app){
   const ens=Object.values(S.bom).map(b=>b.ensamble).sort();
   const libreTxt=fmtFechaHora(new Date(Date.now()+c.anticipacion*3600000));
   app.innerHTML=`
-  <div class="view-head"><div><h2>Plan de producción</h2><p>Qué ensamble corre, cuántas piezas, a qué UPH, en qué turno y en qué línea. Con el UPH se calcula el consumo por hora de cada NP del BOM (UPH × cantidad por unidad).</p></div>
+  <div class="view-head"><div><h2>Plan de producción</h2><p>Qué ensamble corre, cuántas piezas, a qué UPH, en qué turno y en qué línea. Con el UPH se calcula el consumo por hora de cada NP del BOM (UPH × cantidad por unidad). El surtido de cada ensamble arranca cuando alguien presiona <b>Iniciar ensamble</b> en Surtido.</p></div>
   ${ed?`<div class="row"><button class="btn" id="tpl-plan">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-plan" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
   ${ed&&c.anticipacion>0?`<div class="note" style="margin-bottom:16px">El plan se postea con <b>${fmtHoras(c.anticipacion)}</b> de anticipación al inicio del turno: ahora entran sin aprobación los turnos que inician del <b>${esc(libreTxt)}</b> en adelante. ${ap?"Como Gerencia, tus altas, cambios y bajas se aplican directo.":"Altas, cambios o bajas de turnos que inician antes se envían a <b>aprobación de Gerencia</b> y no cuentan en el surtido hasta aprobarse."}</div>`:""}
   ${pend.length&&(ed||ap)?`<div class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="ph"><h3>Pendientes de aprobación de Gerencia</h3><span class="pill p-warn">${pend.length}</span></div>
@@ -67,12 +76,11 @@ function viewPlan(app){
     <form id="f-plan" class="row">
       <div class="fld"><label for="p-fecha">Fecha</label><input type="date" id="p-fecha" value="${S.sel.fecha}" required></div>
       <div class="fld"><label for="p-ens">Ensamble</label><input id="p-ens" class="w-m" list="dl-ens" required><datalist id="dl-ens">${ens.map(e=>`<option value="${esc(e)}">`).join("")}</datalist></div>
-      <div class="fld"><label for="p-wo">WO</label><input id="p-wo" class="w-s" required autocomplete="off" placeholder="CTI002647" style="text-transform:uppercase" title="Work order del ensamble"></div>
+      <div class="fld"><label for="p-wo">WO</label><input id="p-wo" class="w-s" required autocomplete="off" style="text-transform:uppercase" title="Work order del ensamble"></div>
       <div class="fld"><label for="p-cant">Cantidad</label><input id="p-cant" type="number" min="1" class="w-s" required></div>
       <div class="fld"><label for="p-turno">Turno</label><select id="p-turno">${Object.keys(c.turnos).map(t=>`<option>${t}</option>`).join("")}</select></div>
-      <div class="fld"><label for="p-linea">Línea</label><input id="p-linea" class="w-s" required></div>
+      <div class="fld"><label for="p-linea">Línea</label>${lineField("p-linea","")}</div>
       <div class="fld"><label for="p-uph">UPH</label><input id="p-uph" type="number" min="1" class="w-xs" title="Unidades por hora del ensamble; con él se calcula el consumo de cada NP"></div>
-      <div class="fld"><label for="p-arr">Arranque</label><select id="p-arr"><option value="turno">Al inicio del turno</option><option value="manual">Manual (Iniciar ensamble)</option></select></div>
       <button class="btn pri">Agregar al plan</button>
     </form></div></div>`:""}
   <div class="panel"><div class="tbl-wrap"><table>
@@ -97,7 +105,7 @@ function viewPlan(app){
       ()=>safeWrite(()=>p.pendiente.tipo==="alta"?Store.del("plan",p._id):Store.set("plan",p._id,withoutPend(p,"canceló "+p.pendiente.tipo))));
   });
   document.getElementById("f-plan").onsubmit=async e=>{e.preventDefault();
-    const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),wo:normWO(ffv("p-wo")),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:ffv("p-arr"),creado:Date.now(),por:S.me.gafete};
+    const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),wo:normWO(ffv("p-wo")),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:"manual",creado:Date.now(),por:S.me.gafete};
     if(!validWO(p.wo)) return toast("Captura la WO del ensamble (letras y números, p. ej. CTI002647).");
     if(!planUph(p)) return toast(`Captura el UPH de ${p.ensamble}: con él se calcula el consumo de cada NP.`);
     const req=needsApproval(p);
@@ -114,20 +122,21 @@ function viewPlan(app){
   });
   app.querySelectorAll("[data-edit-plan]").forEach(b=>b.onclick=()=>openPlanEdit(S.plan[b.dataset.editPlan]));
   app.querySelectorAll("[data-roll-plan]").forEach(b=>b.onclick=()=>openPlanRoll(S.plan[b.dataset.rollPlan]));
-  document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","WO","Cantidad","Turno","Linea","UPH","Arranque"],[today(),"ENS-1001","CTI002647",480,"T1","L1",60,"turno"],[today(),"ENS-2002","CTI002648",200,"T1","L2",40,"manual"]]);
+  document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","WO","Cantidad","Turno","Linea","UPH"],[today(),"ENS-1001","CTI002647",480,"T1",lineasCat()[0]||"L1",60],[today(),"ENS-2002","CTI002648",200,"T1",lineasCat()[1]||"L2",40]]);
   document.getElementById("xl-plan").onchange=e=>readXlsx(e.target.files[0],async rows=>{
-    let n=0, bad=0, sinUph=0, nPend=0, sinWo=0;
+    let n=0, bad=0, sinUph=0, nPend=0, sinWo=0, sinLinea=0;
     for(const r of rows){
       const g=k=>pick(r,k);
-      const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),wo:normWO(g(["wo","workorder","work order","orden","ot"])),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:/manual/i.test(String(g(["arranque","inicio","start"])||""))?"manual":"turno",creado:Date.now(),por:S.me.gafete};
+      const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),wo:normWO(g(["wo","workorder","work order","orden","ot"])),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:"manual",creado:Date.now(),por:S.me.gafete};
       if(/^\d$/.test(p.turno)) p.turno="T"+p.turno;
       if(!p.fecha||!p.ensamble||!(p.cantidad>0)||!p.turno||!p.linea){bad++;continue;}
       if(!validWO(p.wo)){sinWo++;continue;}
+      p.linea=catalogLine(p.linea); if(!p.linea){sinLinea++;continue;}
       const req=needsApproval(p); if(req){ p.pendiente=solicitud("alta"); nPend++; }
       p.historial=[histEntry(req?"solicitó alta":"alta",{origen:"Excel"})];
       await Store.set("plan",newId(),p); n++; if(!planUph(p)) sinUph++;
     }
-    toast(`Plan: ${n} filas cargadas${nPend?` (${nPend} enviadas a aprobación de Gerencia)`:""}${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinWo?`, ${sinWo} ignoradas por no traer WO válida`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
+    toast(`Plan: ${n} filas cargadas${nPend?` (${nPend} enviadas a aprobación de Gerencia)`:""}${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinWo?`, ${sinWo} ignoradas por no traer WO válida`:""}${sinLinea?`, ${sinLinea} ignoradas por línea fuera del catálogo`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
   });
 }
 function openPlanRoll(p){
@@ -165,11 +174,11 @@ function openPlanEdit(p){
     <form class="pb" id="f-pe">
       <div class="note"><b class="mono">${esc(p.ensamble)}</b> · ${esc(p.fecha)}${req?`<br>Inicia en menos de ${fmtHoras(c.anticipacion)}: el cambio se envía a <b>aprobación de Gerencia</b> y el plan vigente no cambia hasta aprobarse.`:""}</div>
       <div class="row">
-        <div class="fld"><label for="pe-wo">WO</label><input id="pe-wo" class="w-s" value="${esc(p.wo||"")}" required autocomplete="off" placeholder="CTI002647" style="text-transform:uppercase"></div>
+        <div class="fld"><label for="pe-wo">WO</label><input id="pe-wo" class="w-s" value="${esc(p.wo||"")}" required autocomplete="off" style="text-transform:uppercase"></div>
         <div class="fld"><label for="pe-cant">Cantidad</label><input id="pe-cant" type="number" min="1" class="w-s" value="${esc(p.cantidad)}" required></div>
         <div class="fld"><label for="pe-uph">UPH</label><input id="pe-uph" type="number" min="1" class="w-xs" value="${esc(p.uph||"")}" placeholder="${S.bom[safeId(p.ensamble)]?.uph?"BOM":""}"></div>
         <div class="fld"><label for="pe-turno">Turno</label><select id="pe-turno">${Object.keys(c.turnos).map(t=>`<option ${p.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
-        <div class="fld"><label for="pe-linea">Línea</label><input id="pe-linea" class="w-s" value="${esc(p.linea)}" required></div>
+        <div class="fld"><label for="pe-linea">Línea</label>${lineField("pe-linea",p.linea)}</div>
       </div>
       <div class="err" id="pe-err"></div>
       <div class="row" style="justify-content:flex-end"><button class="btn pri">${req?"Enviar a aprobación":"Guardar cambios"}</button></div>

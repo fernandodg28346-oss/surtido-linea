@@ -47,7 +47,7 @@ function render(soft){
   document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""} title="${TAB_LABEL[t]}" aria-label="${TAB_LABEL[t]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICON[t]}</svg><span class="t">${TAB_LABEL[t]}</span>${t==="plan"&&can.approve()&&nPend?`<span class="tab-n" title="${nPend} pendiente(s) de aprobación">${nPend}</span>`:""}</button>`).join("");
   document.getElementById("who").innerHTML=`<span class="nm">${esc(S.me.nombre)}</span><span class="role">${esc(ROLES[S.me.rol].label)}</span><button id="logout" title="Salir (${esc(S.me.nombre)})" aria-label="Salir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span class="t">Salir</span></button>`;
   document.getElementById("conn").textContent="● "+Store.equipo;
-  ({lineas:viewLineas,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,reportes:viewReportes,gafetes:viewGafetes})[S.view](app);
+  ({lineas:viewLineas,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,reportes:viewReportes,gafetes:viewGafetes,ajustes:viewAjustes})[S.view](app);
 }
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-tab]"); if(t){ S.view=t.dataset.tab; render(); return; }

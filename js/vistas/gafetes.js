@@ -1,6 +1,6 @@
-/* ===================== Gafetes y ajustes ===================== */
+/* ===================== Gafetes ===================== */
 function viewGafetes(app){
-  const c=cfg(); const q=(S.sel.qGaf||"").toLowerCase();
+  const q=(S.sel.qGaf||"").toLowerCase();
   const all=Object.values(S.gafetes).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const us=all.filter(u=>!q||(u.gafete+" "+u.nombre+" "+(u.area||"")).toLowerCase().includes(q));
   const roleOpts=sel=>Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${sel===k?"selected":""}>${v.label}</option>`).join("");
@@ -12,18 +12,9 @@ function viewGafetes(app){
       <div class="panel"><div class="ph"><h3>Registrar gafete</h3></div><div class="pb"><form id="f-user" class="stack">
         <div class="fld"><label for="u-g">Gafete</label><input id="u-g" required autocomplete="off" placeholder="Escanea o teclea"></div>
         <div class="fld"><label for="u-n">Nombre</label><input id="u-n" required></div>
-        <div class="fld"><label for="u-a">Área o línea</label><input id="u-a" placeholder="Ej. L1, Almacén"></div>
+        <div class="fld"><label for="u-a">Área o línea</label><input id="u-a" list="dl-areas" placeholder="Ej. L1, Almacén"><datalist id="dl-areas">${lineasCat().map(l=>`<option value="${esc(l)}">`).join("")}</datalist></div>
         <div class="fld"><label for="u-r">Rol</label><select id="u-r">${roleOpts("receptor")}</select></div>
         <button class="btn pri">Registrar gafete</button></form></div></div>
-      <div class="panel"><div class="ph"><h3>Parámetros de surtido</h3></div><div class="pb"><form id="f-cfg" class="stack">
-        <div class="row"><div class="fld"><label for="c-pct">Punto de reorden %</label><input id="c-pct" type="number" min="20" max="90" value="${c.pct}" class="w-xs"></div>
-        <div class="fld"><label for="c-tol">Tolerancia min</label><input id="c-tol" type="number" min="0" value="${c.tolerancia}" class="w-xs"></div>
-        <div class="fld"><label for="c-ant">Anticipación del plan (horas)</label><input id="c-ant" type="number" min="0" step="0.5" value="${c.anticipacion}" class="w-xs" title="Horas antes del inicio del turno. Altas, cambios o bajas con menos anticipación requieren aprobación de Gerencia. 0 = no se requiere aprobación."></div></div>
-        ${Object.entries(c.turnos).map(([t,v])=>`<div class="row"><div class="fld"><label>${t}</label><span class="mono">Turno</span></div>
-          <div class="fld"><label for="c-${t}-i">Inicio</label><input type="time" id="c-${t}-i" value="${v.inicio}"></div>
-          <div class="fld"><label for="c-${t}-f">Fin</label><input type="time" id="c-${t}-f" value="${v.fin}"></div></div>`).join("")}
-        <p class="small muted" style="margin:0">El punto de reorden nunca baja de 20%. Con anticipación 0, el plan se modifica sin aprobación de Gerencia.</p>
-        <button class="btn pri">Guardar parámetros</button></form></div></div>
     </div>
     <div class="panel"><div class="ph"><h3>Gafetes registrados</h3>
       <div class="row"><input id="g-q" placeholder="Buscar gafete, nombre o área" value="${esc(S.sel.qGaf||"")}" aria-label="Buscar gafete"><span class="muted small">${us.length} de ${all.length}</span></div></div>
@@ -50,10 +41,6 @@ function viewGafetes(app){
       await Store.set("gafetes",safeId(g),{gafete:g,nombre:nom,area:String(pick(r,["area","área","linea","línea"])??"").trim(),rol}); n++; }
     toast(`Gafetes: ${n} registrados o actualizados${bad?`, ${bad} filas sin gafete o nombre`:""}.`);
   });
-  document.getElementById("f-cfg").onsubmit=async e=>{e.preventDefault();
-    const turnos={}; Object.keys(c.turnos).forEach(t=>turnos[t]={inicio:ffv(`c-${t}-i`),fin:ffv(`c-${t}-f`)});
-    const pct=Math.max(20,Number(ffv("c-pct"))||20);
-    if(await safeWrite(()=>Store.set("config","general",{pct,tolerancia:Number(ffv("c-tol"))||0,anticipacionHoras:Math.max(0,Number(ffv("c-ant"))||0),turnos}))) toast("Parámetros guardados");};
   app.querySelectorAll("[data-rol]").forEach(s=>s.onchange=()=>{const u=S.gafetes[s.dataset.rol]; safeWrite(()=>Store.set("gafetes",u._id,Object.assign({},u,{rol:s.value})));});
   app.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=()=>{const u=S.gafetes[b.dataset.delUser]; confirmBox(`¿Dar de baja a ${u.nombre}?`,"Dar de baja",()=>safeWrite(()=>Store.del("gafetes",u._id)));});
 }
