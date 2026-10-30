@@ -1,11 +1,11 @@
 /* ===================== Usuarios (gafetes) ===================== */
-// Solicitudes de acceso (sl_solicitudes), en vivo mientras el administrador las ve.
+// Solicitudes de acceso pendientes (sl_solicitudes_acceso), en vivo mientras el administrador las ve.
 let solWatch=null;
 function watchSolicitudes(){
   if(solWatch) return;
-  const load=async()=>{ const {data,error}=await Store.sb.from("sl_solicitudes").select("*").order("creado");
+  const load=async()=>{ const {data,error}=await Store.sb.from("sl_solicitudes_acceso").select("*").eq("estado","pendiente").order("creado");
     S.solicitudes=error?[]:data; if(S.view==="gafetes") render(true); };
-  solWatch=Store.sb.channel("sl_sol_"+newId()).on("postgres_changes",{event:"*",schema:"public",table:"sl_solicitudes"},load).subscribe();
+  solWatch=Store.sb.channel("sl_sol_"+newId()).on("postgres_changes",{event:"*",schema:"public",table:"sl_solicitudes_acceso"},load).subscribe();
   load();
 }
 function viewGafetes(app){
@@ -15,14 +15,14 @@ function viewGafetes(app){
   const us=all.filter(u=>!q||(u.gafete+" "+u.nombre+" "+(u.area||"")).toLowerCase().includes(q));
   const roleOpts=sel=>Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${sel===k?"selected":""}>${v.label}</option>`).join("");
   app.innerHTML=`
-  <div class="view-head"><div><h2>Usuarios</h2><p>Cada persona entra con su correo y contraseña. Crea su cuenta en Supabase (Authentication → Users → Add user); al entrar, la persona envía su solicitud y aquí la apruebas, lo que liga la cuenta a su gafete y le da un rol. Quien solo recibe material no necesita cuenta; basta con registrar su gafete.</p></div>
+  <div class="view-head"><div><h2>Usuarios</h2><p>Cada persona pide acceso desde la pantalla de inicio con "Solicitar acceso". Al aprobar aquí se crea su cuenta con una contraseña inicial que le entregas, ligada a su gafete y con un rol; en su primer ingreso la app le pide crear una propia. Quien solo recibe material no necesita cuenta; basta con registrar su gafete.</p></div>
   <div class="row"><button class="btn" id="tpl-gaf">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-gaf" accept=".xlsx,.xls,.csv"></label></div></div>
   ${sols.length?`<div class="panel" style="margin-bottom:16px;border-color:var(--warn)"><div class="ph"><h3>Solicitudes de acceso</h3><span class="pill p-warn">${sols.length}</span></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Gafete</th><th>Enviada</th><th></th></tr></thead>
+    <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Gafete</th><th>Área</th><th>Enviada</th><th></th></tr></thead>
     <tbody>${sols.map(s=>{ const g=userByBadge(s.gafete); return `<tr><td><b>${esc(s.nombre)}</b></td><td>${esc(s.email)}</td>
-      <td class="mono">${esc(s.gafete)}${g?`<div class="small muted" style="font-family:var(--f-body)">Registrado: ${esc(g.nombre)}${g.user_id?" (ya tiene cuenta)":""}</div>`:""}</td>
+      <td class="mono">${esc(s.gafete)}${g?`<div class="small muted" style="font-family:var(--f-body)">Registrado: ${esc(g.nombre)}${g.user_id?" (ya tiene cuenta)":""}</div>`:""}</td><td>${esc(s.area||"")}</td>
       <td class="small">${new Date(s.creado).toLocaleString("es-MX",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</td>
-      <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn ok" data-aprobar-sol="${s.user_id}">Aprobar</button><button class="btn" data-rechazar-sol="${s.user_id}">Rechazar</button></div></td></tr>`; }).join("")}</tbody></table></div></div>`:""}
+      <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn ok" data-aprobar-sol="${s.id}">Aprobar</button><button class="btn" data-rechazar-sol="${s.id}">Rechazar</button></div></td></tr>`; }).join("")}</tbody></table></div></div>`:""}
   <div class="grid2">
     <div class="stack">
       <div class="panel"><div class="ph"><h3>Registrar gafete</h3></div><div class="pb"><form id="f-user" class="stack">
@@ -31,7 +31,7 @@ function viewGafetes(app){
         <div class="fld"><label for="u-a">Área o línea</label><input id="u-a" list="dl-areas" placeholder="Ej. L1, Almacén"><datalist id="dl-areas">${lineasCat().map(l=>`<option value="${esc(l)}">`).join("")}</datalist></div>
         <div class="fld"><label for="u-r">Rol</label><select id="u-r">${roleOpts("receptor")}</select></div>
         <button class="btn pri">Registrar gafete</button>
-        <p class="small muted" style="margin:0">Para personas sin cuenta, como quien recibe material. Quien usa la app necesita una cuenta: créala en Supabase y aprueba su solicitud arriba.</p></form></div></div>
+        <p class="small muted" style="margin:0">Para personas sin cuenta, como quien recibe material. Quien usa la app pide acceso desde la pantalla de inicio y apruebas su solicitud arriba.</p></form></div></div>
     </div>
     <div class="panel"><div class="ph"><h3>Gafetes registrados</h3>
       <div class="row"><input id="g-q" placeholder="Buscar gafete, nombre o área" value="${esc(S.sel.qGaf||"")}" aria-label="Buscar gafete"><span class="muted small">${us.length} de ${all.length}</span></div></div>
@@ -64,40 +64,62 @@ function viewGafetes(app){
   app.querySelectorAll("[data-unlink]").forEach(b=>b.onclick=()=>{ const u=S.gafetes[b.dataset.unlink];
     confirmBox(`¿Quitar el acceso de ${u.nombre} (${u.email||"cuenta"})? Ya no podrá entrar a la app; su gafete se conserva para recibir material.`,"Quitar acceso",()=>{
       const n=Object.assign({},u); delete n.user_id; delete n.email; return safeWrite(()=>Store.set("gafetes",u._id,n)); }); });
-  app.querySelectorAll("[data-aprobar-sol]").forEach(b=>b.onclick=()=>openApprove(sols.find(s=>s.user_id===b.dataset.aprobarSol)));
-  app.querySelectorAll("[data-rechazar-sol]").forEach(b=>b.onclick=()=>{ const s=sols.find(x=>x.user_id===b.dataset.rechazarSol);
+  app.querySelectorAll("[data-aprobar-sol]").forEach(b=>b.onclick=()=>openApprove(sols.find(s=>s.id===b.dataset.aprobarSol)));
+  app.querySelectorAll("[data-rechazar-sol]").forEach(b=>b.onclick=()=>{ const s=sols.find(x=>x.id===b.dataset.rechazarSol);
     confirmBox(`¿Rechazar la solicitud de ${s.nombre} (${s.email})? Podrá volver a enviarla.`,"Rechazar",async()=>{
-      if(await safeWrite(async()=>{ const {error}=await Store.sb.from("sl_solicitudes").delete().eq("user_id",s.user_id); if(error) throw error; })) toast("Solicitud rechazada."); }); });
+      if(await safeWrite(async()=>{ const {error}=await Store.sb.from("sl_solicitudes_acceso").update({estado:"rechazada",revisado:new Date().toISOString(),revisado_por:Store.email}).eq("id",s.id); if(error) throw error; })) toast("Solicitud rechazada."); }); });
   app.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=()=>{const u=S.gafetes[b.dataset.delUser]; confirmBox(`¿Dar de baja a ${u.nombre}?`,"Dar de baja",()=>safeWrite(()=>Store.del("gafetes",u._id)));});
 }
 
-// Aprobar: liga la cuenta al gafete (el existente o uno nuevo) con un rol que entra a la app.
+// Aprobar: la función sl-aprobar-acceso crea la cuenta con la contraseña inicial (o usa la que ya tiene ese correo)
+// y la liga al gafete con el rol elegido.
+const newPassword=()=>{ const c="abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789", r=crypto.getRandomValues(new Uint32Array(10)); return [...r].map(x=>c[x%c.length]).join(""); };
 function openApprove(sol){
   const root=document.getElementById("modal-root"), prev=userByBadge(sol.gafete);
   const roles=Object.entries(ROLES).filter(([,v])=>v.tabs.length), def=prev&&ROLES[prev.rol]?.tabs.length?prev.rol:"materialista";
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="ap-t">
     <div class="ph"><h3 id="ap-t">Aprobar acceso</h3><button class="btn ghost" id="ap-x">Cancelar</button></div>
     <form class="pb" id="f-ap">
-      <div class="note"><b>${esc(sol.email)}</b> pidió acceso como <b>${esc(sol.nombre)}</b>.</div>
-      <div class="fld"><label for="ap-g">Gafete</label><input id="ap-g" value="${esc(sol.gafete)}" required autocomplete="off"></div>
-      <div class="fld"><label for="ap-n">Nombre</label><input id="ap-n" value="${esc(prev?.nombre||sol.nombre)}" required></div>
-      <div class="fld"><label for="ap-a">Área o línea</label><input id="ap-a" value="${esc(prev?.area||"")}" list="dl-ap"><datalist id="dl-ap">${lineasCat().map(l=>`<option value="${esc(l)}">`).join("")}</datalist></div>
-      <div class="fld"><label for="ap-r">Rol</label><select id="ap-r">${roles.map(([k,v])=>`<option value="${k}" ${k===def?"selected":""}>${v.label}</option>`).join("")}</select></div>
+      <div class="note"><b>${esc(sol.nombre)}</b> pidió acceso con <b>${esc(sol.email)}</b>.${prev?`<br>El gafete ${esc(sol.gafete)} ya está registrado a nombre de ${esc(prev.nombre)}.`:""}</div>
+      <div class="row">
+        <div class="fld"><label for="ap-g">Gafete</label><input id="ap-g" class="w-s" value="${esc(sol.gafete)}" required autocomplete="off"></div>
+        <div class="fld" style="flex:1"><label for="ap-n">Nombre</label><input id="ap-n" value="${esc(prev?.nombre||sol.nombre)}" required></div>
+      </div>
+      <div class="row">
+        <div class="fld" style="flex:1"><label for="ap-a">Área o línea</label><input id="ap-a" value="${esc(prev?.area||sol.area||"")}" list="dl-ap"><datalist id="dl-ap">${lineasCat().map(l=>`<option value="${esc(l)}">`).join("")}</datalist></div>
+        <div class="fld"><label for="ap-r">Rol</label><select id="ap-r">${roles.map(([k,v])=>`<option value="${k}" ${k===def?"selected":""}>${v.label}</option>`).join("")}</select></div>
+      </div>
+      <div class="fld"><label for="ap-p">Contraseña inicial</label>
+        <div class="row" style="flex-wrap:nowrap"><input id="ap-p" class="mono" style="flex:1" value="${newPassword()}" minlength="8" required autocomplete="off"><button type="button" class="btn" id="ap-gen">Generar otra</button></div></div>
+      <p class="small muted" style="margin:0">Entrégasela a la persona; en su primer ingreso la app le pedirá crear una propia. Si su correo ya tenía cuenta, conserva su contraseña actual.</p>
       <div class="err" id="ap-err"></div>
-      <div class="row" style="justify-content:flex-end"><button class="btn ok">Aprobar</button></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn ok">Aprobar y crear cuenta</button></div>
     </form></div></div>`;
   const close=()=>root.innerHTML="", err=m=>document.getElementById("ap-err").textContent=m;
   document.getElementById("ap-x").onclick=close;
+  document.getElementById("ap-gen").onclick=()=>{ document.getElementById("ap-p").value=newPassword(); };
   document.getElementById("f-ap").onsubmit=async e=>{ e.preventDefault();
-    const g=ffv("ap-g"), nombre=ffv("ap-n"), area=ffv("ap-a"), rol=ffv("ap-r"), cur=userByBadge(g);
-    if(cur?.user_id&&cur.user_id!==sol.user_id) return err(`El gafete ${g} ya está ligado a la cuenta ${cur.email||""}.`);
-    const ok=await safeWrite(async()=>{
-      // Una cuenta se liga a un solo gafete: si ya tenía otro, se le quita.
-      for(const o of Object.values(S.gafetes).filter(u=>u.user_id===sol.user_id&&u.gafete!==g)){ const n=Object.assign({},o); delete n.user_id; delete n.email; await Store.set("gafetes",o._id,n); }
-      const data=Object.assign({},cur||{},{gafete:g,nombre,area,rol,email:sol.email,user_id:sol.user_id}); delete data._id;
-      await Store.set("gafetes",cur?cur._id:safeId(g),data);
-      const {error}=await Store.sb.from("sl_solicitudes").delete().eq("user_id",sol.user_id); if(error) throw error;
-    });
-    if(ok){ close(); toast(`${nombre} ya tiene acceso como ${ROLES[rol].label}.`); }
+    const body={solicitud_id:sol.id,gafete:ffv("ap-g"),nombre:ffv("ap-n"),area:ffv("ap-a"),rol:ffv("ap-r"),password:document.getElementById("ap-p").value};
+    const cur=userByBadge(body.gafete);
+    if(cur?.user_id&&cur.email&&cur.email.toLowerCase()!==sol.email.toLowerCase()) return err(`El gafete ${body.gafete} ya está ligado a la cuenta ${cur.email}.`);
+    const btn=e.target.querySelector("button.ok"); btn.disabled=true; err("");
+    const {data,error}=await Store.sb.functions.invoke("sl-aprobar-acceso",{body});
+    if(error){ let m=error.message; try{ m=(await error.context.json()).error||m; }catch(x){} btn.disabled=false; return err(m); }
+    showCredentials(body,sol.email,data.existente);
   };
+}
+function showCredentials(b,email,existente){
+  const root=document.getElementById("modal-root");
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="cr-t">
+    <div class="ph"><h3 id="cr-t">Acceso aprobado</h3></div>
+    <div class="pb">
+      <p style="margin:0"><b>${esc(b.nombre)}</b> ya tiene acceso como <b>${esc(ROLES[b.rol].label)}</b>.</p>
+      ${existente?`<div class="note">El correo <b>${esc(email)}</b> ya tenía cuenta: entra con su contraseña actual.</div>`
+        :`<div class="note">Entrégale estos datos. En su primer ingreso la app le pedirá crear su propia contraseña.<br><br>
+          Correo: <b class="mono">${esc(email)}</b><br>Contraseña inicial: <b class="mono" id="cr-p">${esc(b.password)}</b></div>`}
+      <div class="row" style="justify-content:flex-end">${existente?"":`<button class="btn" id="cr-copy">Copiar datos</button>`}<button class="btn pri" id="cr-ok">Listo</button></div>
+    </div></div></div>`;
+  document.getElementById("cr-ok").onclick=()=>root.innerHTML="";
+  const cp=document.getElementById("cr-copy");
+  if(cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(`Surtido de Línea\nCorreo: ${email}\nContraseña inicial: ${b.password}`); toast("Datos copiados."); }catch(x){ toast("No se pudo copiar; anótalos."); } };
 }
