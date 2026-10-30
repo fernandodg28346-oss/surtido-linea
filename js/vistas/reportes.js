@@ -1,4 +1,4 @@
-/* ===================== Reportes (sección de Métricas y reportes) =====================
+/* ===================== Reportes (sección de Métricas) =====================
    Construye cada reporte del periodo y filtros de Métricas, para verlo en tabla y descargarlo en Excel o CSV.
    El cumplimiento se recalcula día por día con el mismo motor del surtido (dayTrips). */
 const REPORTES={
