@@ -228,3 +228,9 @@ td.num,th.num{text-align:right}
 .ch-tip{position:fixed;z-index:70;padding:8px 10px;font-size:12px;display:grid;gap:3px;pointer-events:none;box-shadow:0 4px 14px #0003}
 .ch-tip div{display:flex;align-items:center;gap:6px}
 .ch-tip-f{color:var(--ink-2);margin-top:2px}
+
+/* selector de sección (Resumen / Reportes) */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.seg button{font:600 13px var(--f-body);padding:8px 16px;border:0;background:transparent;color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
