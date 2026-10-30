@@ -42,6 +42,14 @@ Deno.serve(async (req) => {
   if (!sol || sol.estado !== "pendiente") return json(404, { error: "La solicitud ya no está pendiente." });
   const email = String(sol.email).toLowerCase();
 
+  // Gafete: el registrado con ese número (si lo hay) o uno nuevo. Se revisa antes de crear la cuenta.
+  const { data: porNumero } = await admin.from("sl_gafetes").select("id,data").eq("data->>gafete", gafete).limit(1);
+  const { data: porId } = await admin.from("sl_gafetes").select("id,data").eq("id", safeId(gafete)).limit(1);
+  const actual = porNumero?.[0] ?? porId?.[0];
+  if (actual?.data?.user_id && String(actual.data.email ?? "").toLowerCase() !== email) {
+    return json(409, { error: `El gafete ${gafete} ya está ligado a otra cuenta (${actual.data.email ?? ""}).` });
+  }
+
   // Cuenta: se crea con la contraseña inicial; si el correo ya tiene cuenta, se usa esa y no se toca su contraseña.
   let userId = "", existente = false;
   const creado = await admin.auth.admin.createUser({
@@ -62,10 +70,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Gafete: el registrado con ese número (si lo hay) o uno nuevo; una cuenta se liga a un solo gafete.
-  const { data: porNumero } = await admin.from("sl_gafetes").select("id,data").eq("data->>gafete", gafete).limit(1);
-  const { data: porId } = await admin.from("sl_gafetes").select("id,data").eq("id", safeId(gafete)).limit(1);
-  const actual = porNumero?.[0] ?? porId?.[0];
+  // Una cuenta se liga a un solo gafete: si ya tenía otro, se le quita.
   if (actual?.data?.user_id && actual.data.user_id !== userId) {
     return json(409, { error: `El gafete ${gafete} ya está ligado a otra cuenta (${actual.data.email ?? ""}).` });
   }
