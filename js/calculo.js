@@ -65,6 +65,30 @@ function estimateOnHand(it,now){
   const used=it.rate*(it.tl.eff(now)-(r?it.tl.eff(r.ts):0))/60;
   return Math.max(0,Math.round((r?Number(r.cantidad):0)+delivered-used));
 }
+// Cada surtido programado de una fecha con su resultado, a partir de los surtidos y eventos de ESA fecha
+// (sirve para fechas distintas a la seleccionada, p. ej. reportes). Estado: "ok" a tiempo, "late" tarde,
+// "miss" no surtido (ya tocaba y no se confirmó), "sched" aún no toca, "stop" en pausa por paro.
+function dayTrips(fecha,surtidos,eventos,now){
+  const prev=[S.surtidos,S.eventos]; S.surtidos=surtidos; S.eventos=eventos;
+  const out=[];
+  try{
+    activePlans().filter(p=>p.fecha===fecha).forEach(p=>computeItems(p).items.forEach(it=>it.trips.forEach(t=>{
+      const s=tripStatus(t,now), d=s.done;
+      out.push({fecha,turno:p.turno,linea:p.linea,ensamble:p.ensamble,wo:(d&&d.wo)||p.wo||"",estacion:it.estacion,np:it.np,cantidad:t.qty,
+        programado:t.at?t.at.getTime():null,real:d?d.ts:null,retraso:d&&t.at?(d.ts-t.at.getTime())/60000:null,
+        estado:d?(s.key==="late"?"late":"ok"):s.key==="due"?"miss":s.key==="stop"?"stop":"sched",
+        surtio:d?d.surtioNombre:"",recibio:d?d.recibioNombre:""});
+    })));
+  }finally{ S.surtidos=prev[0]; S.eventos=prev[1]; }
+  return out;
+}
+const ESTADO_LABEL={ok:"A tiempo",late:"Tarde",miss:"No surtido",sched:"Programado",stop:"En pausa"};
+// Cuenta a tiempo / tarde / no surtido por la llave que regresa keyFn.
+function tally(trips,keyFn){
+  const g={};
+  trips.forEach(t=>{ if(!["ok","late","miss"].includes(t.estado)) return; const k=keyFn(t); const o=g[k]=g[k]||{key:k,ok:0,late:0,miss:0}; o[t.estado]++; });
+  return Object.values(g);
+}
 function tripStatus(t,now){
   const done=S.surtidos[t.id];
   if(done){ const late=!!t.at&&(done.ts-t.at.getTime())>cfg().tolerancia*60000; return {key:late?"late":"done",done}; }

@@ -7,12 +7,12 @@ function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.p
   anticipacion:c.anticipacionHoras!=null?Math.max(0,Number(c.anticipacionHoras)||0):c.anticipacion!=null?Math.max(0,Number(c.anticipacion)||0)*24:DEFAULT_CFG.anticipacionHoras, turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
 
 const ROLES={
-  admin:{label:"Administrador",tabs:["lineas","surtido","plan","bom","metricas","gafetes"]},
-  planeador:{label:"Planeador",tabs:["plan","bom","lineas","surtido","metricas"]},
+  admin:{label:"Administrador",tabs:["lineas","surtido","plan","bom","metricas","reportes","gafetes"]},
+  planeador:{label:"Planeador",tabs:["plan","bom","lineas","surtido","metricas","reportes"]},
   materialista:{label:"Materialista",tabs:["lineas","surtido"]},
-  lider:{label:"Líder de línea",tabs:["lineas","surtido","metricas"]},
-  gerente:{label:"Gerencia",tabs:["plan","lineas","surtido","metricas"]},
-  supervisor:{label:"Supervisor",tabs:["lineas","metricas","surtido","plan"]},
+  lider:{label:"Líder de línea",tabs:["lineas","surtido","metricas","reportes"]},
+  gerente:{label:"Gerencia",tabs:["plan","lineas","surtido","metricas","reportes"]},
+  supervisor:{label:"Supervisor",tabs:["lineas","metricas","reportes","surtido","plan"]},
   receptor:{label:"Recibe material (sin acceso)",tabs:[]}
 };
 // Íconos del menú lateral (trazo, heredan el color del texto).
@@ -22,9 +22,10 @@ const TAB_ICON={
   plan:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
   bom:'<path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="18" r="1.2"/>',
   metricas:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  reportes:'<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h8"/>',
   gafetes:'<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M8 17c1-2 2.5-3 4-3s3 1 4 3"/>'
 };
-const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",gafetes:"Gafetes y ajustes"};
+const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",reportes:"Reportes",gafetes:"Gafetes y ajustes"};
 const can={
   editPlan:()=>["admin","planeador","gerente"].includes(S.me?.rol),
   // Aprueba altas, cambios y bajas del plan dentro del plazo de anticipación; sus propios cambios no requieren aprobación.

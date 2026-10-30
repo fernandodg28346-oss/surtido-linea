@@ -17,6 +17,9 @@ function viewMetricas(app){
   const avgDelay=delays.length?delays.reduce((a,b)=>a+b,0)/delays.length:0;
   const elapsed=plans.reduce((n,p)=>n+computeItems(p).items.reduce((m,it)=>m+it.trips.filter(t=>t.at&&t.at.getTime()<=now).length,0),0);
   const lines=Object.keys(byLine).sort();
+  const turnos=Object.keys(c.turnos), porTurno=Object.fromEntries(tally(dayTrips(S.sel.fecha,S.surtidos,S.eventos,now).filter(t=>!S.sel.turno||t.turno===S.sel.turno),t=>t.turno).map(x=>[x.key,x]));
+  const turnoCats=turnos.filter(t=>porTurno[t]).map(t=>Object.assign({label:t},porTurno[t]));
+  const tardias=recs.filter(r=>r.ts-r.programado>c.tolerancia*60000).sort((a,b)=>(b.ts-b.programado)-(a.ts-a.programado));
   app.innerHTML=`
   <div class="view-head"><div><h2>Métricas de surtido</h2><p>Cumplimiento contra el programa calculado del plan. "A tiempo" = confirmado dentro de ${c.tolerancia} min de la hora programada.</p></div></div>
   <div class="filters">
@@ -29,6 +32,12 @@ function viewMetricas(app){
     <div class="panel kpi"><div class="lbl">Vencidos ahora</div><div class="v ${vencidosAhora?"bad":""}" style="${vencidosAhora?"color:var(--bad)":""}">${vencidosAhora}</div><div class="s">Sin confirmar después de su hora</div></div>
     <div class="panel kpi"><div class="lbl">Retraso promedio</div><div class="v">${delays.length?fmtN(avgDelay,1):"—"}<span style="font-size:18px"> min</span></div><div class="s">${tot} surtidos programados en el día</div></div>
   </div>
+  <div class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-bottom:16px">
+    <div class="panel"><div class="ph"><h3>Por turno</h3><span class="small muted">Surtidos que ya tocaban</span></div><div class="pb">${barChart(turnoCats,{titulo:"Surtidos por turno",alto:200})}</div></div>
+    <div class="panel"><div class="ph"><h3>Resumen por turno</h3></div><div class="tbl-wrap"><table>
+      <thead><tr><th>Turno</th><th class="num">A tiempo</th><th class="num">Tarde</th><th class="num">No surtidos</th><th class="num">% a tiempo</th></tr></thead>
+      <tbody>${turnoCats.length?turnoCats.map(t=>{const n=t.ok+t.late+t.miss;return`<tr><td><b>${esc(t.label)}</b> <span class="muted small">${esc(c.turnos[t.label]?.inicio||"")}–${esc(c.turnos[t.label]?.fin||"")}</span></td><td class="num">${t.ok}</td><td class="num">${t.late}</td><td class="num">${t.miss}</td><td class="num">${pct(t.ok,n)}%</td></tr>`}).join(""):`<tr><td colspan="5" class="empty">Sin surtidos que ya tocaran.</td></tr>`}</tbody></table></div></div>
+  </div>
   <div class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
     <div class="panel"><div class="ph"><h3>Por línea</h3><span class="small muted"><span class="pill p-ok">A tiempo</span> <span class="pill p-warn">Tarde</span></span></div><div class="pb">
       ${lines.length?`<div class="bars">${lines.map(l=>{const L=byLine[l];return`<div class="bar-row"><b>${esc(l)}</b>
@@ -39,6 +48,9 @@ function viewMetricas(app){
       <thead><tr><th>Materialista</th><th class="num">Surtidos</th><th class="num">Piezas</th><th class="num">Tarde</th></tr></thead>
       <tbody>${Object.keys(byMat).length?Object.entries(byMat).sort((a,b)=>b[1].n-a[1].n).map(([g,m])=>`<tr><td>${esc(m.nombre)} <span class="muted mono small">${esc(g)}</span></td><td class="num">${m.n}</td><td class="num">${fmtN(m.pzs)}</td><td class="num">${m.late}</td></tr>`).join(""):`<tr><td colspan="4" class="empty">Sin surtidos confirmados.</td></tr>`}</tbody></table></div></div>
   </div>
+  <div class="panel" style="margin-top:16px"><div class="ph"><h3>Entregas tardías</h3><span class="muted small">${tardias.length} de ${recs.length} confirmados · más de ${c.tolerancia} min de retraso</span></div><div class="tbl-wrap"><table>
+    <thead><tr><th>Turno</th><th>Prog.</th><th>Surtido</th><th class="num">Retraso</th><th>Línea</th><th>Estación</th><th>NP</th><th>WO</th><th>Surtió</th></tr></thead>
+    <tbody>${tardias.length?tardias.slice(0,100).map(r=>`<tr><td>${esc(r.turno)}</td><td class="mono muted">${fmtT(new Date(r.programado))}</td><td class="mono">${fmtT(new Date(r.ts))}</td><td class="num" style="color:var(--warn);font-weight:600">${ago((r.ts-r.programado)/60000)}</td><td>${esc(r.linea)}</td><td>${esc(r.estacion)}</td><td class="mono">${esc(r.np)}</td><td class="mono">${esc(r.wo||S.plan[r.planId]?.wo||"—")}</td><td>${esc(r.surtioNombre)}</td></tr>`).join(""):`<tr><td colspan="9" class="empty">Sin entregas tardías en esta fecha.</td></tr>`}</tbody></table></div></div>
   <div class="panel" style="margin-top:16px"><div class="ph"><h3>Bitácora de surtidos</h3><span class="muted small">${recs.length} registros</span></div><div class="tbl-wrap"><table>
     <thead><tr><th>Hora</th><th>Prog.</th><th>Línea</th><th>Estación</th><th>NP</th><th class="num">Cant.</th><th>Surtió</th><th>Recibió</th><th>Estado</th></tr></thead>
     <tbody>${recs.length?recs.slice(0,200).map(r=>{const late=r.ts-r.programado>c.tolerancia*60000;return`<tr><td class="mono">${fmtT(new Date(r.ts))}</td><td class="mono muted">${fmtT(new Date(r.programado))}</td><td>${esc(r.linea)}</td><td>${esc(r.estacion)}</td><td class="mono">${esc(r.np)}</td><td class="num">${fmtN(r.cantidad)}</td><td>${esc(r.surtioNombre)}</td><td>${esc(r.recibioNombre)}</td><td>${late?'<span class="pill p-warn">Tarde</span>':'<span class="pill p-ok">A tiempo</span>'}</td></tr>`}).join(""):`<tr><td colspan="9" class="empty">Aún no hay surtidos confirmados en esta fecha.</td></tr>`}</tbody></table></div></div>

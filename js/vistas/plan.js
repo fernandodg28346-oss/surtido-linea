@@ -2,7 +2,10 @@
    Un plan se postea cfg().anticipacion horas antes del inicio de su turno. Altas, cambios y bajas de planes que arrancan
    dentro de ese plazo (o ya arrancaron) quedan pendientes hasta que Gerencia o el administrador las aprueba: mientras tanto el plan vigente
    no cambia y un alta pendiente no genera surtidos. */
-const PLAN_CAMPOS={cantidad:"Cantidad",uph:"UPH",turno:"Turno",linea:"Línea"};
+const PLAN_CAMPOS={wo:"WO",cantidad:"Cantidad",uph:"UPH",turno:"Turno",linea:"Línea"};
+// Work order del ensamble, p. ej. CTI002647: letras y números (guion permitido), 4 a 20 caracteres, en mayúsculas.
+const normWO=v=>String(v??"").trim().toUpperCase();
+const validWO=v=>/^[A-Z0-9][A-Z0-9-]{3,19}$/.test(v);
 const PEND_LABEL={alta:"Alta",cambio:"Cambio",baja:"Baja"};
 function hoursAhead(p){ return (shiftStart(p.fecha,p.turno).getTime()-Date.now())/3600000; }
 // Rolar: un plan posteado en tiempo y forma (creado con la anticipación requerida respecto a su turno original)
@@ -31,7 +34,7 @@ function solicitud(tipo,extra){ return Object.assign({tipo,ts:Date.now(),por:S.m
 function withoutPend(p,accion){ const n=Object.assign({},p,{historial:[...(p.historial||[]),histEntry(accion,{solicito:p.pendiente?.porNombre||""})]}); delete n.pendiente; return n; }
 function pendDetail(p){
   const q=p.pendiente;
-  if(q.tipo==="alta") return `Agregar ${fmtN(p.cantidad)} pzs${planUph(p)?` a ${fmtN(planUph(p))} UPH`:""}`;
+  if(q.tipo==="alta") return `Agregar ${fmtN(p.cantidad)} pzs${planUph(p)?` a ${fmtN(planUph(p))} UPH`:""}${p.wo?` · WO <span class="mono">${esc(p.wo)}</span>`:""}`;
   if(q.tipo==="baja") return "Quitar del plan";
   return Object.entries(q.cambios||{}).map(([k,v])=>`${PLAN_CAMPOS[k]||k}: <span class="mono">${esc(p[k]??"—")}</span> → <b class="mono">${esc(v??"—")}</b>`).join("<br>");
 }
@@ -64,6 +67,7 @@ function viewPlan(app){
     <form id="f-plan" class="row">
       <div class="fld"><label for="p-fecha">Fecha</label><input type="date" id="p-fecha" value="${S.sel.fecha}" required></div>
       <div class="fld"><label for="p-ens">Ensamble</label><input id="p-ens" class="w-m" list="dl-ens" required><datalist id="dl-ens">${ens.map(e=>`<option value="${esc(e)}">`).join("")}</datalist></div>
+      <div class="fld"><label for="p-wo">WO</label><input id="p-wo" class="w-s" required autocomplete="off" placeholder="CTI002647" style="text-transform:uppercase" title="Work order del ensamble"></div>
       <div class="fld"><label for="p-cant">Cantidad</label><input id="p-cant" type="number" min="1" class="w-s" required></div>
       <div class="fld"><label for="p-turno">Turno</label><select id="p-turno">${Object.keys(c.turnos).map(t=>`<option>${t}</option>`).join("")}</select></div>
       <div class="fld"><label for="p-linea">Línea</label><input id="p-linea" class="w-s" required></div>
@@ -72,13 +76,13 @@ function viewPlan(app){
       <button class="btn pri">Agregar al plan</button>
     </form></div></div>`:""}
   <div class="panel"><div class="tbl-wrap"><table>
-    <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th><th>Arranque</th>${ed?"<th></th>":""}</tr></thead>
+    <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th>WO</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th><th>Arranque</th>${ed?"<th></th>":""}</tr></thead>
     <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr${p.pendiente?.tipo==="alta"?' style="opacity:.6"':""}>
       <td class="mono" style="white-space:nowrap">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}${p.pendiente?`<div><span class="pill p-warn" title="Pendiente de aprobación de Gerencia">${PEND_LABEL[p.pendiente.tipo]} pendiente</span></div>`:""}${p.original?`<div class="small muted" style="font-family:var(--f-body);white-space:nowrap">Rolado desde ${esc(p.original.fecha)} ${esc(p.original.turno)}</div>`:""}</td>
-      <td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
+      <td class="mono">${p.wo?esc(p.wo):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
       <td>${hasB?'<span class="pill p-ok">Cargado</span>':'<span class="pill p-bad">Falta BOM</span>'}</td>
       <td>${startLabel(p)}</td>
-      ${ed?`<td><div class="row" style="flex-wrap:nowrap">${p.pendiente?'<span class="small muted">En aprobación</span>':`${(rb=>`<button class="btn ghost" data-roll-plan="${p._id}" ${rb?`disabled title="${esc(rb)}"`:'title="Recorrer a otro turno sin aprobación"'}>Rolar</button>`)(rollBlock(p))}<button class="btn ghost" data-edit-plan="${p._id}">Editar</button><button class="btn danger" data-del-plan="${p._id}">Quitar</button>`}</div></td>`:""}</tr>`}).join(""):`<tr><td colspan="10" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
+      ${ed?`<td><div class="row" style="flex-wrap:nowrap">${p.pendiente?'<span class="small muted">En aprobación</span>':`${(rb=>`<button class="btn ghost" data-roll-plan="${p._id}" ${rb?`disabled title="${esc(rb)}"`:'title="Recorrer a otro turno sin aprobación"'}>Rolar</button>`)(rollBlock(p))}<button class="btn ghost" data-edit-plan="${p._id}">Editar</button><button class="btn danger" data-del-plan="${p._id}">Quitar</button>`}</div></td>`:""}</tr>`}).join(""):`<tr><td colspan="11" class="empty">No hay plan cargado. ${ed?"Agrega una fila arriba o carga el Excel del plan.":""}</td></tr>`}</tbody>
   </table></div></div>`;
   app.querySelectorAll("[data-aprobar],[data-rechazar]").forEach(b=>b.onclick=()=>{
     const ok=!!b.dataset.aprobar, p=S.plan[b.dataset.aprobar||b.dataset.rechazar]; if(!p?.pendiente) return;
@@ -93,7 +97,8 @@ function viewPlan(app){
       ()=>safeWrite(()=>p.pendiente.tipo==="alta"?Store.del("plan",p._id):Store.set("plan",p._id,withoutPend(p,"canceló "+p.pendiente.tipo))));
   });
   document.getElementById("f-plan").onsubmit=async e=>{e.preventDefault();
-    const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:ffv("p-arr"),creado:Date.now(),por:S.me.gafete};
+    const p={fecha:ffv("p-fecha"),ensamble:ffv("p-ens"),wo:normWO(ffv("p-wo")),cantidad:Number(ffv("p-cant")),turno:ffv("p-turno"),linea:ffv("p-linea"),uph:Number(ffv("p-uph"))||null,arranque:ffv("p-arr"),creado:Date.now(),por:S.me.gafete};
+    if(!validWO(p.wo)) return toast("Captura la WO del ensamble (letras y números, p. ej. CTI002647).");
     if(!planUph(p)) return toast(`Captura el UPH de ${p.ensamble}: con él se calcula el consumo de cada NP.`);
     const req=needsApproval(p);
     if(req) p.pendiente=solicitud("alta");
@@ -109,19 +114,20 @@ function viewPlan(app){
   });
   app.querySelectorAll("[data-edit-plan]").forEach(b=>b.onclick=()=>openPlanEdit(S.plan[b.dataset.editPlan]));
   app.querySelectorAll("[data-roll-plan]").forEach(b=>b.onclick=()=>openPlanRoll(S.plan[b.dataset.rollPlan]));
-  document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","Cantidad","Turno","Linea","UPH","Arranque"],[today(),"ENS-1001",480,"T1","L1",60,"turno"],[today(),"ENS-2002",200,"T1","L2",40,"manual"]]);
+  document.getElementById("tpl-plan").onclick=()=>downloadXlsx("plantilla_plan.xlsx",[["Fecha","Ensamble","WO","Cantidad","Turno","Linea","UPH","Arranque"],[today(),"ENS-1001","CTI002647",480,"T1","L1",60,"turno"],[today(),"ENS-2002","CTI002648",200,"T1","L2",40,"manual"]]);
   document.getElementById("xl-plan").onchange=e=>readXlsx(e.target.files[0],async rows=>{
-    let n=0, bad=0, sinUph=0, nPend=0;
+    let n=0, bad=0, sinUph=0, nPend=0, sinWo=0;
     for(const r of rows){
       const g=k=>pick(r,k);
-      const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:/manual/i.test(String(g(["arranque","inicio","start"])||""))?"manual":"turno",creado:Date.now(),por:S.me.gafete};
+      const p={fecha:xlDate(g(["fecha","date"])),ensamble:String(g(["ensamble","assembly","modelo"])||"").trim(),wo:normWO(g(["wo","workorder","work order","orden","ot"])),cantidad:Number(g(["cantidad","qty","piezas"])),turno:String(g(["turno","shift"])||"").trim().toUpperCase(),linea:String(g(["linea","línea","line"])||"").trim(),uph:Number(g(["uph"]))||null,arranque:/manual/i.test(String(g(["arranque","inicio","start"])||""))?"manual":"turno",creado:Date.now(),por:S.me.gafete};
       if(/^\d$/.test(p.turno)) p.turno="T"+p.turno;
       if(!p.fecha||!p.ensamble||!(p.cantidad>0)||!p.turno||!p.linea){bad++;continue;}
+      if(!validWO(p.wo)){sinWo++;continue;}
       const req=needsApproval(p); if(req){ p.pendiente=solicitud("alta"); nPend++; }
       p.historial=[histEntry(req?"solicitó alta":"alta",{origen:"Excel"})];
       await Store.set("plan",newId(),p); n++; if(!planUph(p)) sinUph++;
     }
-    toast(`Plan: ${n} filas cargadas${nPend?` (${nPend} enviadas a aprobación de Gerencia)`:""}${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
+    toast(`Plan: ${n} filas cargadas${nPend?` (${nPend} enviadas a aprobación de Gerencia)`:""}${bad?`, ${bad} ignoradas por datos incompletos`:""}${sinWo?`, ${sinWo} ignoradas por no traer WO válida`:""}${sinUph?`, ${sinUph} sin UPH (no calculan surtido hasta capturarlo)`:""}.`);
   });
 }
 function openPlanRoll(p){
@@ -159,6 +165,7 @@ function openPlanEdit(p){
     <form class="pb" id="f-pe">
       <div class="note"><b class="mono">${esc(p.ensamble)}</b> · ${esc(p.fecha)}${req?`<br>Inicia en menos de ${fmtHoras(c.anticipacion)}: el cambio se envía a <b>aprobación de Gerencia</b> y el plan vigente no cambia hasta aprobarse.`:""}</div>
       <div class="row">
+        <div class="fld"><label for="pe-wo">WO</label><input id="pe-wo" class="w-s" value="${esc(p.wo||"")}" required autocomplete="off" placeholder="CTI002647" style="text-transform:uppercase"></div>
         <div class="fld"><label for="pe-cant">Cantidad</label><input id="pe-cant" type="number" min="1" class="w-s" value="${esc(p.cantidad)}" required></div>
         <div class="fld"><label for="pe-uph">UPH</label><input id="pe-uph" type="number" min="1" class="w-xs" value="${esc(p.uph||"")}" placeholder="${S.bom[safeId(p.ensamble)]?.uph?"BOM":""}"></div>
         <div class="fld"><label for="pe-turno">Turno</label><select id="pe-turno">${Object.keys(c.turnos).map(t=>`<option ${p.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
@@ -170,9 +177,10 @@ function openPlanEdit(p){
   const close=()=>root.innerHTML="";
   document.getElementById("pe-x").onclick=close;
   document.getElementById("f-pe").onsubmit=async e=>{e.preventDefault();
-    const nv={cantidad:Number(ffv("pe-cant")),uph:Number(ffv("pe-uph"))||null,turno:ffv("pe-turno"),linea:ffv("pe-linea")};
+    const nv={wo:normWO(ffv("pe-wo")),cantidad:Number(ffv("pe-cant")),uph:Number(ffv("pe-uph"))||null,turno:ffv("pe-turno"),linea:ffv("pe-linea")};
     const cambios={}; Object.keys(nv).forEach(k=>{ if((p[k]??null)!==nv[k]) cambios[k]=nv[k]; });
     if(!Object.keys(cambios).length) return close();
+    if(!validWO(nv.wo)) return document.getElementById("pe-err").textContent="Captura la WO del ensamble (letras y números, p. ej. CTI002647).";
     if(!planUph(Object.assign({},p,nv))) return document.getElementById("pe-err").textContent=`Captura el UPH de ${p.ensamble}.`;
     const req=needsApproval(p,Object.assign({},p,nv));
     const next=req?Object.assign({},p,{pendiente:solicitud("cambio",{cambios})})
