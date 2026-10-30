@@ -38,9 +38,17 @@ function readXlsx(file,cb){
 async function downloadXlsx(name,aoa){
   if(!window.XLSX) return toast("No se pudo cargar el generador de Excel.");
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),"Datos");
-  const data=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  await saveFile(name,new Uint8Array(XLSX.write(wb,{bookType:"xlsx",type:"array"})),aoa);
+}
+// CSV en UTF-8 con BOM para que Excel respete acentos; comas como separador.
+async function downloadCsv(name,aoa){
+  const cell=v=>{ const s=v==null?"":String(v); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const text="\ufeff"+aoa.map(r=>r.map(cell).join(",")).join("\r\n");
+  await saveFile(name,new TextEncoder().encode(text),aoa);
+}
+async function saveFile(name,data,aoa){
   let dl=null; try{ dl=window.claude&&await window.claude.use("downloads"); }catch(e){}
-  if(dl){ try{ await dl.save({filename:name,data:new Uint8Array(data)}); }catch(e){ if(e.code!=="declined") toast("No se pudo descargar ("+e.code+")."); } return; }
+  if(dl){ try{ await dl.save({filename:name,data}); }catch(e){ if(e.code!=="declined") toast("No se pudo descargar ("+e.code+")."); } return; }
   try{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data])); a.download=name; a.click(); }
   catch(e){ toast("Columnas: "+aoa[0].join(", ")); }
 }

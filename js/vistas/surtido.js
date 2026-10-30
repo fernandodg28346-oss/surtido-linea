@@ -67,7 +67,7 @@ function lineCtl(linea,plans,now){
       const confirmed=Object.values(S.surtidos).some(r=>r.planId===p._id);
       const act=!ops?"":!planStart(p)?`<button class="btn ok" data-start-plan="${p._id}">Iniciar ensamble</button>`
         :(!p.inicioReal&&!confirmed?`<button class="btn ghost" data-unstart-plan="${p._id}" title="El ensamble no arrancó al inicio del turno: deja sus surtidos en espera hasta que se inicie">No ha arrancado</button>`:"");
-      return `<div class="ctl-plan"><span class="grow"><b class="mono">${esc(p.ensamble)}</b> <span class="muted">· ${esc(p.turno)} · ${fmtN(p.cantidad)} pzs</span></span>${startLabel(p)}${act}</div>`;
+      return `<div class="ctl-plan"><span class="grow"><b class="mono">${esc(p.ensamble)}</b> <span class="muted">·${p.wo?` WO <span class="mono">${esc(p.wo)}</span> ·`:""} ${esc(p.turno)} · ${fmtN(p.cantidad)} pzs</span></span>${startLabel(p)}${act}</div>`;
     }).join("")}</div>
   </div>`;
 }
@@ -158,7 +158,7 @@ function npRow({p,it,statuses,nxt},now){
   const allDone=!nxt, rc=it.recs[it.recs.length-1];
   return `<div class="np-row">
     <div style="min-width:0"><div class="np">${esc(it.np)} <span class="muted" style="font-family:var(--f-body);font-weight:400;font-size:13px">${esc(it.desc||"")}</span></div>
-      <div class="plan-line">${esc(p.ensamble)} · ${esc(p.turno)} · ${fmtN(p.cantidad)} pzs</div>
+      <div class="plan-line">${esc(p.ensamble)}${p.wo?` · WO <span class="mono">${esc(p.wo)}</span>`:""} · ${esc(p.turno)} · ${fmtN(p.cantidad)} pzs</div>
       <div class="np-meta"><span>Cada <b>${fmtInterval(it.intervalMin)}</b></span><span>Surtir <b>${fmtN(it.repl)}</b></span><span>Reorden en <b>${fmtN(it.rop)}</b> / ${fmtN(it.cap)}</span><span>Consumo <b>${fmtN(it.rate,1)}</b>/h</span></div></div>
     <div class="np-act">${allDone?'<span class="pill p-ok">Completo</span>':`${pillOf(nxt.s.key)}<span class="mono small">${nxt.t.at?fmtT(nxt.t.at):"En pausa"} · ${fmtN(nxt.t.qty)} pzs</span>
       ${can.confirm()&&nxt.t.at?`<button class="btn ${nxt.s.key==="due"?"ok":"pri"}" data-confirm='${esc(JSON.stringify([p._id,nxt.t.k,it.estacion,it.np]))}'>Confirmar surtido</button>`:""}`}
@@ -177,7 +177,7 @@ function openConfirm(p,it,trip){
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="mc-t">
     <div class="ph"><h3 id="mc-t">Confirmar surtido</h3><button class="btn ghost" id="mc-x">Cancelar</button></div>
     <div class="pb">
-      <div class="note"><b class="mono">${esc(it.np)}</b> · ${fmtN(trip.qty)} pzs → Línea <b>${esc(p.linea)}</b>, estación <b>${esc(it.estacion)}</b><br>Programado ${fmtT(trip.at)} · surtido ${it.trips.indexOf(trip)+1} de ${it.trips.length} · Surte <b>${esc(s.nombre)}</b></div>
+      <div class="note"><b class="mono">${esc(it.np)}</b> · ${fmtN(trip.qty)} pzs → Línea <b>${esc(p.linea)}</b>, estación <b>${esc(it.estacion)}</b>${p.wo?` · WO <b class="mono">${esc(p.wo)}</b>`:""}<br>Programado ${fmtT(trip.at)} · surtido ${it.trips.indexOf(trip)+1} de ${it.trips.length} · Surte <b>${esc(s.nombre)}</b></div>
       <div class="fld"><label for="mc-r">Quien recibe: escanea su gafete</label><input id="mc-r" class="badge-in" style="margin-top:0" autocomplete="off" inputmode="numeric" placeholder="••••••"></div>
       <div class="err" id="mc-err"></div>
     </div></div></div>`;
@@ -191,7 +191,7 @@ function openConfirm(p,it,trip){
     const fail=m=>{ err.textContent=m; inp.select(); };
     if(!r) return fail(`El gafete ${inp.value} no está registrado. Regístralo en la sección Gafetes.`);
     if(r.gafete===s.gafete) return fail("Quien recibe debe ser una persona distinta a quien surte.");
-    const rec={planId:p._id,fecha:p.fecha,turno:p.turno,linea:p.linea,ensamble:p.ensamble,estacion:it.estacion,np:it.np,k:trip.k,
+    const rec={planId:p._id,fecha:p.fecha,turno:p.turno,linea:p.linea,ensamble:p.ensamble,wo:p.wo||"",estacion:it.estacion,np:it.np,k:trip.k,
       programado:trip.at.getTime(),cantidad:trip.qty,ts:Date.now(),surtio:s.gafete,surtioNombre:s.nombre,recibio:r.gafete,recibioNombre:r.nombre};
     inp.disabled=true;
     const ok=await safeWrite(()=>Store.insert("surtidos",trip.id,rec));

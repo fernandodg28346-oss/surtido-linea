@@ -15,6 +15,17 @@ const Store={
     }
     return out;
   },
+  // Filas cuyo data->>field (texto, p. ej. fecha AAAA-MM-DD) está entre from y to, inclusive.
+  async fetchRange(col,field,from,to){
+    const out={}; let start=0;
+    for(;;){
+      const {data,error}=await this.sb.from("sl_"+col).select("id,data").gte("data->>"+field,from).lte("data->>"+field,to).order("id").range(start,start+999);
+      if(error) throw error;
+      data.forEach(r=>{out[r.id]=Object.assign({},r.data,{_id:r.id});});
+      if(data.length<1000) break; start+=1000;
+    }
+    return out;
+  },
   watch(col,cb,filter){
     let alive=true, timer=null;
     const load=async()=>{ try{ const m=await this.fetch(col,filter); if(alive) cb(m); }catch(e){ if(alive) toast("No se pudieron leer los datos ("+(e.message||e.code)+")."); } };
