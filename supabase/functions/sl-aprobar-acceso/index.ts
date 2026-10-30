@@ -38,13 +38,15 @@ Deno.serve(async (req) => {
   if (!gafete || !nombre) return json(400, { error: "Faltan el gafete o el nombre." });
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-  const { data: sol } = await admin.from("sl_solicitudes_acceso").select("*").eq("id", id).maybeSingle();
+  const { data: sol, error: eSol } = await admin.from("sl_solicitudes_acceso").select("*").eq("id", id).maybeSingle();
+  if (eSol) return json(500, { error: "No se pudo leer la solicitud: " + eSol.message });
   if (!sol || sol.estado !== "pendiente") return json(404, { error: "La solicitud ya no está pendiente." });
   const email = String(sol.email).toLowerCase();
 
   // Gafete: el registrado con ese número (si lo hay) o uno nuevo. Se revisa antes de crear la cuenta.
-  const { data: porNumero } = await admin.from("sl_gafetes").select("id,data").eq("data->>gafete", gafete).limit(1);
-  const { data: porId } = await admin.from("sl_gafetes").select("id,data").eq("id", safeId(gafete)).limit(1);
+  const { data: porNumero, error: eG1 } = await admin.from("sl_gafetes").select("id,data").eq("data->>gafete", gafete).limit(1);
+  const { data: porId, error: eG2 } = await admin.from("sl_gafetes").select("id,data").eq("id", safeId(gafete)).limit(1);
+  if (eG1 || eG2) return json(500, { error: "No se pudo leer los gafetes: " + (eG1 ?? eG2)!.message });
   const actual = porNumero?.[0] ?? porId?.[0];
   if (actual?.data?.user_id && String(actual.data.email ?? "").toLowerCase() !== email) {
     return json(409, { error: `El gafete ${gafete} ya está ligado a otra cuenta (${actual.data.email ?? ""}).` });
@@ -84,7 +86,8 @@ Deno.serve(async (req) => {
   const { error: eG } = await admin.from("sl_gafetes").upsert({ id: actual?.id ?? safeId(gafete), data, actualizado: new Date().toISOString() });
   if (eG) return json(500, { error: "No se pudo ligar el gafete: " + eG.message });
 
-  await admin.from("sl_solicitudes_acceso")
+  const { error: eU } = await admin.from("sl_solicitudes_acceso")
     .update({ estado: "aprobada", revisado: new Date().toISOString(), revisado_por: quien?.email ?? "" }).eq("id", id);
+  if (eU) return json(500, { error: "La cuenta quedó lista, pero no se pudo cerrar la solicitud: " + eU.message });
   return json(200, { ok: true, existente, email });
 });
