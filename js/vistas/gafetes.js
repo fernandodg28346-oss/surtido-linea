@@ -1,11 +1,11 @@
-/* ===================== Gafetes ===================== */
+/* ===================== Usuarios (gafetes) ===================== */
 function viewGafetes(app){
   const q=(S.sel.qGaf||"").toLowerCase();
   const all=Object.values(S.gafetes).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   const us=all.filter(u=>!q||(u.gafete+" "+u.nombre+" "+(u.area||"")).toLowerCase().includes(q));
   const roleOpts=sel=>Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${sel===k?"selected":""}>${v.label}</option>`).join("");
   app.innerHTML=`
-  <div class="view-head"><div><h2>Gafetes</h2><p>Registro de cada gafete y la persona a la que pertenece. Quien recibe material en línea solo necesita estar registrado aquí; el rol define si además puede entrar a la app y qué ve.</p></div>
+  <div class="view-head"><div><h2>Usuarios</h2><p>Registro de cada gafete y la persona a la que pertenece. Quien recibe material en línea solo necesita estar registrado aquí; el rol define si además puede entrar a la app y qué ve.</p></div>
   <div class="row"><button class="btn" id="tpl-gaf">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-gaf" accept=".xlsx,.xls,.csv"></label></div></div>
   <div class="grid2">
     <div class="stack">

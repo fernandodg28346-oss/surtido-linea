@@ -91,6 +91,6 @@ function renderLogin(app){
   </div></div>`;
   const inp=document.getElementById("badge"); inp.focus();
   document.getElementById("dev-out").onclick=()=>Store.sb.auth.signOut();
-  inp.onkeydown=e=>{ if(e.key==="Enter"){ S.loginMsg=""; if(!login(inp.value)){ document.getElementById("badge-err").textContent=S.loginMsg||"Gafete "+inp.value+" no registrado. Pide al administrador que lo registre en Gafetes."; inp.select(); } } };
+  inp.onkeydown=e=>{ if(e.key==="Enter"){ S.loginMsg=""; if(!login(inp.value)){ document.getElementById("badge-err").textContent=S.loginMsg||"Gafete "+inp.value+" no registrado. Pide al administrador que lo registre en Usuarios."; inp.select(); } } };
 }
 const ffv=id=>document.getElementById(id).value.trim();

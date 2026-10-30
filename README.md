@@ -13,7 +13,7 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 
 | Rol | Acceso |
 |---|---|
-| Administrador | Todo, incluidos Reportes, Gafetes y Ajustes |
+| Administrador | Todo, incluidos Reportes, Usuarios y Ajustes |
 | Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas, Reportes |
 | Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas, Reportes |
 | Materialista | Líneas y Surtido (confirma surtidos) |
@@ -44,7 +44,7 @@ delete from public.sl_equipos where nombre = 'Tablet Línea 1';
 
 ### 3. Primer uso
 
-Al abrir la app con un equipo autorizado y sin gafetes registrados, la app pide registrar al primer administrador. Él da de alta los demás gafetes en la pestaña **Gafetes**, uno por uno o desde Excel.
+Al abrir la app con un equipo autorizado y sin gafetes registrados, la app pide registrar al primer administrador. Él da de alta los demás gafetes en la pestaña **Usuarios**, uno por uno o desde Excel.
 
 ## Cargas desde Excel
 
@@ -129,7 +129,7 @@ js/
     surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
     metricas.js       Métricas por fecha: por turno, por línea, tardías y bitácoras
     reportes.js       Reportes por periodo con descarga a Excel o CSV
-    gafetes.js        Registro de gafetes y roles
+    gafetes.js        Usuarios: registro de gafetes y roles
     ajustes.js        Parámetros de surtido y catálogo de líneas
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
   arranque.js         Inicia la app (va al final del orden de carga)
