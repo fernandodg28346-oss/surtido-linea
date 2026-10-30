@@ -76,7 +76,7 @@ Cada ensamble del plan lleva su WO, obligatoria al agregarlo (a mano o por Excel
 
 ## Métricas y reportes
 
-- **Métricas** (por fecha): cumplimiento, gráfica y resumen **por turno** (a tiempo, tarde, no surtidos), por línea, por materialista, **entregas tardías** ordenadas por retraso, y bitácoras de surtidos, paros y reconteos.
+- **Métricas**: periodo por **día** (en vivo), **semana** (lunes a domingo, últimas 26 semanas) o **rango de fechas** (hasta 62 días), con filtros de turno y **línea**. Cumplimiento, gráfica por día (en semana o rango), gráfica y resumen **por turno** y **por línea** (a tiempo, tarde, no surtidos), por materialista, **entregas tardías** ordenadas por retraso, y bitácoras de surtidos, paros y reconteos.
 - **Reportes** (periodo de hasta 62 días, con filtros de turno y línea): cumplimiento por día y turno (con gráfica de barras por día), surtidos confirmados, entregas tardías, paros y reconteos, y plan de producción con WO. Cada reporte se descarga completo en **Excel** o **CSV**.
 - "Tarde" = confirmado después de la tolerancia (10 min por defecto); "No surtido" = ya tocaba y no se confirmó.
 
@@ -127,7 +127,7 @@ js/
     bom.js            BOM por ensamble
     lineas.js         Estado de líneas
     surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
-    metricas.js       Métricas por fecha: por turno, por línea, tardías y bitácoras
+    metricas.js       Métricas por día, semana o rango: por turno, por línea, tardías y bitácoras
     reportes.js       Reportes por periodo con descarga a Excel o CSV
     gafetes.js        Usuarios: registro de gafetes y roles
     ajustes.js        Parámetros de surtido y catálogo de líneas
