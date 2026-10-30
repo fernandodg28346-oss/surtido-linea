@@ -81,7 +81,7 @@ function viewGafetes(app){
 const newPassword=()=>{ const c="abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789", r=crypto.getRandomValues(new Uint32Array(10)); return [...r].map(x=>c[x%c.length]).join(""); };
 function openApprove(sol){
   const root=document.getElementById("modal-root"), prev=userByBadge(sol.gafete);
-  const roles=Object.entries(ROLES).filter(([,v])=>v.tabs.length), def=prev&&ROLES[prev.rol]?.tabs.length?prev.rol:"materialista";
+  const roles=Object.entries(ROLES).filter(([k])=>k!=="receptor"), def=prev&&prev.rol!=="receptor"&&ROLES[prev.rol]?prev.rol:"materialista";
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="ap-t">
     <div class="ph"><h3 id="ap-t">Aprobar acceso</h3><button class="btn ghost" id="ap-x">Cancelar</button></div>
     <form class="pb" id="f-ap">

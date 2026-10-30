@@ -11,6 +11,8 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 2. **Aprobación:** el administrador revisa la solicitud en **Usuarios** y la aprueba con un rol y una **contraseña inicial** que le entrega a la persona; la app crea la cuenta y la liga a su gafete. En su primer ingreso, la app le pide crear su propia contraseña. Cualquiera puede cambiarla después con **Contraseña** en el menú.
 3. **Surtido:** el materialista o el líder de línea presiona **Confirmar surtido** y quien recibe en línea escanea su gafete. Con eso queda registrado quién surtió, quién recibió y a qué hora.
 
+Estos son los permisos por defecto; el administrador los ajusta en **Ajustes → Permisos por rol**.
+
 | Rol | Acceso |
 |---|---|
 | Administrador | Todo, incluidos Reportes, Usuarios y Ajustes |
@@ -71,6 +73,15 @@ Para cada NP en su estación:
 - Frecuencia = cantidad a surtir ÷ consumo por hora
 
 El surtido de cada ensamble arranca cuando alguien presiona **Iniciar ensamble** en Surtido; el primer surtido es a esa hora, con la estación llena. Una línea está **al 100 %** cuando todos los surtidos cuya hora ya pasó están confirmados.
+
+## Permisos por rol
+
+En **Ajustes → Permisos por rol** el administrador decide qué pestañas ve cada rol (Líneas, Surtido, Plan de producción, BOM, Métricas, Reportes) y qué acciones puede hacer: modificar el plan, aprobar cambios al plan, editar el BOM, confirmar surtidos, y paros/reconteos/inicio de ensamble. Se guardan en `sl_config` (documento `permisos`) y solo el administrador puede cambiarlos (lo valida la base).
+
+- El administrador siempre tiene todo y es el único con **Usuarios** y **Ajustes**; "Recibe material" no entra a la app.
+- Dar una acción también da su pestaña; quitar una pestaña quita las acciones que dependen de ella.
+- Un rol sin pestañas no puede entrar (la app avisa antes de guardar).
+- **Valores por defecto** regresa a los permisos de la tabla de roles de arriba.
 
 ## Catálogo de líneas
 
@@ -137,7 +148,7 @@ js/
     metricas.js       Métricas por día, semana o rango: por turno, por línea, tardías y bitácoras
     reportes.js       Reportes por periodo con descarga a Excel o CSV
     gafetes.js        Usuarios: solicitudes de acceso, gafetes y roles
-    ajustes.js        Parámetros de surtido y catálogo de líneas
+    ajustes.js        Parámetros de surtido, catálogo de líneas y permisos por rol
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
   arranque.js         Inicia la app (va al final del orden de carga)
 supabase/migrations/  Esquema de la base de datos

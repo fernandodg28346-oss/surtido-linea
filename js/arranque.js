@@ -15,7 +15,7 @@
   const {data:mine,error}=await Store.sb.from("sl_gafetes").select("id,data").eq("data->>user_id",S.uid).maybeSingle();
   if(error){ app.innerHTML=authCard(`<h2>No se pudo revisar tu acceso</h2><p class="err">${esc(authError(error))}</p><button class="btn" id="a-out">Cerrar sesión</button>`); return bindOut(); }
   if(!mine) return renderPending(app,session);
-  if(!ROLES[mine.data.rol]?.tabs.length) return renderNoAccess(app,mine.data);
+  if(mine.data.rol==="receptor"||!ROLES[mine.data.rol]) return renderNoAccess(app,mine.data);
   const pending=new Set(["gafetes","bom","plan","config","surtidos","eventos"]);
   const first=c=>m=>{ S[c]=m; pending.delete(c); if(!pending.size) S.ready=true; if(S.ready) render(); };
   ["gafetes","bom","plan","config"].forEach(c=>Store.watch(c,first(c)));
