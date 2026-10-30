@@ -25,13 +25,13 @@ const TAB_ICON={
   gafetes:'<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M8 17c1-2 2.5-3 4-3s3 1 4 3"/>',
   ajustes:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>'
 };
-const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas y reportes",gafetes:"Usuarios",ajustes:"Ajustes"};
+const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",gafetes:"Usuarios",ajustes:"Ajustes"};
 // Privilegios configurables por rol (Ajustes → Permisos por rol, guardados en sl_config "permisos").
 // El administrador los tiene todos y es el único con Usuarios y Ajustes (la base solo le deja escribir gafetes a él);
 // "Recibe material" no entra a la app. Sin configuración, cada rol conserva los privilegios de ROLES y PERM_DEFAULT.
 const PRIVS=[
   {k:"tab:lineas",g:"Pestañas",l:"Líneas"},{k:"tab:surtido",g:"Pestañas",l:"Surtido"},{k:"tab:plan",g:"Pestañas",l:"Plan de producción"},
-  {k:"tab:bom",g:"Pestañas",l:"BOM"},{k:"tab:metricas",g:"Pestañas",l:"Métricas y reportes"},
+  {k:"tab:bom",g:"Pestañas",l:"BOM"},{k:"tab:metricas",g:"Pestañas",l:"Métricas"},
   {k:"editPlan",g:"Acciones",l:"Modificar el plan (agregar, editar, quitar, rolar, Excel)",tab:"plan"},
   {k:"approve",g:"Acciones",l:"Aprobar cambios al plan y modificarlo sin aprobación",tab:"plan"},
   {k:"editBom",g:"Acciones",l:"Editar BOM",tab:"bom"},

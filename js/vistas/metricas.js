@@ -53,7 +53,7 @@ function viewMetricas(app){
     <div class="fld"><label for="m-linea">Línea</label><select id="m-linea"><option value="">Todas</option>${lineas.map(l=>`<option ${M.linea===l?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
   </div>`;
   const rep=src&&esRep?buildReport({desde:per.desde,hasta:per.hasta,turno:S.sel.turno,linea:M.linea,tipo:M.rep,data:src},dias):null;
-  const head=`<div class="view-head"><div><h2>Métricas y reportes</h2><p>Cumplimiento contra el programa calculado del plan. "A tiempo" = confirmado dentro de ${c.tolerancia} min de la hora programada; "No surtido" = ya tocaba y no se confirmó.</p></div>
+  const head=`<div class="view-head"><div><h2>Métricas</h2><p>Cumplimiento contra el programa calculado del plan. "A tiempo" = confirmado dentro de ${c.tolerancia} min de la hora programada; "No surtido" = ya tocaba y no se confirmó.</p></div>
     ${esRep?`<div class="row"><button class="btn" id="rp-xlsx" ${rep&&rep.rows.length?"":"disabled"}>Descargar Excel</button><button class="btn" id="rp-csv" ${rep&&rep.rows.length?"":"disabled"}>Descargar CSV</button></div>`:""}</div>
   <div class="seg" role="tablist" aria-label="Sección" style="margin-bottom:16px">${[["resumen","Resumen"],["reportes","Reportes"]].map(([k,l])=>`<button role="tab" data-sub="${k}" aria-selected="${M.sub===k}">${l}</button>`).join("")}</div>`;
   const filtrosRep=esRep?filtros.replace('<div class="filters">',`<div class="filters"><div class="fld"><label for="rp-tipo">Reporte</label><select id="rp-tipo">${Object.entries(REPORTES).map(([k,v])=>`<option value="${k}" ${M.rep===k?"selected":""}>${v}</option>`).join("")}</select></div>`):filtros;
