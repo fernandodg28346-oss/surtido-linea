@@ -189,7 +189,7 @@ function openConfirm(p,it,trip){
     if(e.key!=="Enter") return; e.preventDefault(); err.textContent="";
     const r=userByBadge(inp.value);
     const fail=m=>{ err.textContent=m; inp.select(); };
-    if(!r) return fail(`El gafete ${inp.value} no está registrado. Regístralo en la sección Gafetes.`);
+    if(!r) return fail(`El gafete ${inp.value} no está registrado. Regístralo en la sección Usuarios.`);
     if(r.gafete===s.gafete) return fail("Quien recibe debe ser una persona distinta a quien surte.");
     const rec={planId:p._id,fecha:p.fecha,turno:p.turno,linea:p.linea,ensamble:p.ensamble,wo:p.wo||"",estacion:it.estacion,np:it.np,k:trip.k,
       programado:trip.at.getTime(),cantidad:trip.qty,ts:Date.now(),surtio:s.gafete,surtioNombre:s.nombre,recibio:r.gafete,recibioNombre:r.nombre};
