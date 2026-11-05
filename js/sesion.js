@@ -3,7 +3,8 @@
 async function logout(){
   if(logout.enCurso) return; logout.enCurso=true;
   try{ await Promise.race([Store.sb.auth.signOut({scope:"local"}),new Promise(r=>setTimeout(r,3000))]); }catch(e){}
-  try{ Object.keys(localStorage).filter(k=>k.startsWith("sb-")).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  // Solo la sesión de este proyecto de Supabase (sb-<proyecto>-auth-token y su code-verifier).
+  try{ const pre="sb-"+new URL(SL_CONFIG.supabaseUrl).hostname.split(".")[0]+"-"; Object.keys(localStorage).filter(k=>k.startsWith(pre)).forEach(k=>localStorage.removeItem(k)); }catch(e){}
   location.reload();
 }
 function render(soft){
