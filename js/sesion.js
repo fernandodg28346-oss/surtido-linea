@@ -1,5 +1,11 @@
 /* ===================== Sesión y navegación ===================== */
-const logout=()=>Store.sb.auth.signOut();
+// Cierra la sesión en este equipo aunque falle la red o Supabase no responda.
+async function logout(){
+  if(logout.enCurso) return; logout.enCurso=true;
+  try{ await Promise.race([Store.sb.auth.signOut({scope:"local"}),new Promise(r=>setTimeout(r,3000))]); }catch(e){}
+  try{ Object.keys(localStorage).filter(k=>k.startsWith("sb-")).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  location.reload();
+}
 function render(soft){
   if(!S.ready) return;
   if(surtFecha!==S.sel.fecha) watchDia();
