@@ -52,7 +52,7 @@ A partir de ahí, el administrador aprueba las solicitudes en **Usuarios**. El r
 
 ### 3. Correos de Supabase
 
-El enlace de "¿Olvidaste tu contraseña?" regresa a la app. El servicio de correo incluido en Supabase solo envía a los miembros del equipo del proyecto; para que llegue a todo el personal hace falta configurar un SMTP propio. Con la sesión abierta, cada quien puede cambiar la suya con **Contraseña**. En Supabase, **Authentication → URL Configuration**, pon la dirección de la app publicada como **Site URL** y agrégala en **Redirect URLs**.
+El enlace de "¿Olvidaste tu contraseña?" regresa a la app. El servicio de correo incluido en Supabase solo envía a los miembros del equipo del proyecto; para que llegue a todo el personal hace falta configurar un SMTP propio. Con la sesión abierta, cada quien puede cambiar la suya con **Contraseña**. En Supabase, **Authentication → URL Configuration**, agrega la dirección de la app publicada en **Redirect URLs** (la **Site URL** la comparte con Control de Personal; ver [Base de datos compartida](#base-de-datos-compartida)).
 
 ## Cargas desde Excel
 
@@ -122,6 +122,17 @@ En la pestaña **Surtido**, el panel **Control de línea** y cada NP tienen esta
 Los paros y reconteos se guardan en `sl_eventos` y aparecen en **Métricas → Paros y reconteos**. No se borran desde la app; un reconteo equivocado se corrige con otro reconteo.
 
 En **BOM**, las casillas de la lista de ensambles y **Seleccionar todos** permiten eliminar varios ensambles a la vez.
+
+## Base de datos compartida
+
+Este proyecto de Supabase también lo usa **Control de Personal** (repositorio `fernandodgwk-crypto/control-personal`). Antes de cambiar la base o la configuración de inicio de sesión, revisa que no afecte a esa app.
+
+- **Cuentas:** las dos apps usan las mismas cuentas de Supabase. Una persona puede entrar a las dos con el mismo correo y la misma contraseña; si cambia su contraseña en una app, cambia en la otra.
+- **Acceso:** Surtido de Línea da acceso por el gafete ligado en `sl_gafetes`; Control de Personal, por el rol en `perfiles`. Toda cuenta nueva recibe `sin_acceso` en `perfiles` (disparador `on_auth_user_created`), así que una cuenta creada desde una app no ve datos de la otra hasta que su administrador le da acceso.
+- **Tablas:** Surtido de Línea usa solo tablas y funciones con prefijo `sl_`; todo lo demás es de Control de Personal. Ninguna app modifica tablas, funciones ni reglas de la otra.
+- **Cerrar sesión:** cada app cierra la sesión solo en el equipo actual (`signOut({scope:"local"})`) y borra del navegador solo las claves `sb-<proyecto>-`. No uses el cierre global: sacaría a la persona de la otra app en todos sus equipos.
+- **Authentication (una sola configuración para las dos):** *Allow new users to sign up* debe seguir desactivado. En *URL Configuration*, las direcciones de las dos apps deben estar en *Redirect URLs*: cada app manda el enlace de recuperación a su propia dirección y, si falta, Supabase usa la *Site URL*, que es la de una sola app. El SMTP y las reglas de contraseña aplican a las dos.
+- **Cuentas desde Surtido de Línea:** la función `sl-aprobar-acceso` crea la cuenta o, si el correo ya tiene una, la liga al gafete sin cambiar su contraseña.
 
 ## Configuración
 
