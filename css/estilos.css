@@ -36,7 +36,9 @@ h2{font-size:26px}h3{font-size:19px}
 .shell{display:flex;align-items:flex-start;min-height:100vh}
 .side{background:var(--bar);color:var(--bar-ink);position:sticky;top:0;flex:0 0 236px;height:100vh;height:100dvh;display:flex;flex-direction:column;gap:18px;padding:calc(18px + env(safe-area-inset-top,0px)) 0 calc(16px + env(safe-area-inset-bottom,0px)) max(0px,env(safe-area-inset-left,0px));overflow-y:auto;z-index:20}
 .brand{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:0 12px 0 18px;flex-shrink:0}
-.brand-t{display:grid;gap:4px;min-width:0}
+.brand-t{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.brand-t .logo{flex:0 0 34px;width:34px;height:34px;display:block}
+.brand-n{display:grid;gap:4px;min-width:0}
 .brand h1{font-size:23px;line-height:1.05;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .brand .tag{font-family:var(--f-mono);font-size:11px;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 nav.tabs{display:flex;flex-direction:column;gap:2px;flex:1}
@@ -80,6 +82,8 @@ nav.tabs button:hover{opacity:1;background:#ffffff0a}
   .side{height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));overflow:visible}
   .brand{padding:0;flex:1;min-width:0}
   .brand h1{font-size:19px}
+  .brand-t{align-items:center}
+  .brand-t .logo{flex-basis:28px;width:28px;height:28px}
   .brand .tag{display:none}
   .who{display:flex;align-items:center;gap:8px;padding:0;border:0}
   .who .nm,.who .t,.who .role{display:none}
