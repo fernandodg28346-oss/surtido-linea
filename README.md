@@ -16,11 +16,11 @@ Estos son los permisos por defecto; el administrador los ajusta en **Ajustes →
 | Rol | Acceso |
 |---|---|
 | Administrador | Todo, incluidos Usuarios y Ajustes |
-| Planeador | Plan de producción, BOM, Líneas, Surtido, Métricas |
-| Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Surtido, Métricas |
-| Materialista | Líneas y Surtido (confirma surtidos) |
-| Líder de línea | Líneas, Surtido (confirma surtidos), Métricas |
-| Supervisor | Líneas, Métricas, Surtido, Plan (consulta) |
+| Planeador | Plan de producción, BOM, Líneas, Layout, Surtido, Métricas |
+| Gerencia | Plan de producción (aprueba cambios dentro del plazo), Líneas, Layout, Surtido, Métricas |
+| Materialista | Líneas, Layout y Surtido (confirma surtidos) |
+| Líder de línea | Líneas, Layout, Surtido (confirma surtidos), Métricas |
+| Supervisor | Líneas, Layout, Métricas, Surtido, Plan (consulta) |
 | Recibe material | No entra a la app; solo su gafete se usa para recibir |
 
 ## Puesta en marcha
@@ -76,7 +76,7 @@ El surtido de cada ensamble arranca cuando alguien presiona **Iniciar ensamble**
 
 ## Permisos por rol
 
-En **Ajustes → Permisos por rol** el administrador decide qué pestañas ve cada rol (Líneas, Surtido, Plan de producción, BOM, Métricas) y qué acciones puede hacer: modificar el plan, aprobar cambios al plan, editar el BOM, confirmar surtidos, y paros/reconteos/inicio de ensamble. Se guardan en `sl_config` (documento `permisos`) y solo el administrador puede cambiarlos (lo valida la base).
+En **Ajustes → Permisos por rol** el administrador decide qué pestañas ve cada rol (Líneas, Layout, Surtido, Plan de producción, BOM, Métricas) y qué acciones puede hacer: modificar el plan, aprobar cambios al plan, editar el BOM, confirmar surtidos, y paros/reconteos/inicio de ensamble. Se guardan en `sl_config` (documento `permisos`) y solo el administrador puede cambiarlos (lo valida la base).
 
 - El administrador siempre tiene todo y es el único con **Usuarios** y **Ajustes**; "Recibe material" no entra a la app.
 - Dar una acción también da su pestaña; quitar una pestaña quita las acciones que dependen de ella.
@@ -90,6 +90,23 @@ En **Ajustes → Catálogo de líneas** el administrador da de alta las líneas 
 ## Work order (WO)
 
 Cada ensamble del plan lleva su WO, obligatoria al agregarlo (a mano o por Excel) y editable con **Editar**: letras y números, con guion opcional, de 4 a 20 caracteres (p. ej. `CTI002647`); se guarda en mayúsculas. La WO aparece en el plan, en cada surtido, en las métricas y en los reportes, y queda guardada en cada surtido confirmado. Las filas de Excel sin WO válida se ignoran.
+
+## Layout de planta
+
+La pestaña **Layout** muestra el plano de la planta con cada estación de surtido marcada como un rectángulo, coloreado con su estado del día y turno elegidos (mismo cálculo que **Líneas**):
+
+| Color | Estado |
+|---|---|
+| Rojo (parpadea) | Tiene surtidos vencidos; el número indica cuántos |
+| Ámbar | Surtido en menos de 15 min, o línea detenida (rayado) |
+| Verde | Al 100 % |
+| Gris | Sin plan, esperando arranque o falta BOM/UPH |
+
+Al tocar una estación se ven los NP pendientes y **Ir a surtir** abre la pestaña Surtido en esa estación.
+
+**Configuración (solo administrador):** **Editar layout** → **Subir plano** (JPG o PNG; se reduce a 2400 px por lado). Se arrastra sobre el plano para marcar cada estación y se elige su línea y estación (vacía = toda la línea), con un nombre opcional. Las zonas se mueven arrastrándolas y cambian de tamaño desde la esquina; al tocar una se edita o se quita. **Guardar layout** aplica los cambios para todos. La estación debe escribirse igual que en el BOM.
+
+Se guarda en `sl_config`: `layout` (tamaño del plano y zonas, en fracciones del plano, así que se conservan al cambiar la imagen) y `layout_img` (la imagen). La imagen no se lee con el resto de la configuración: solo al abrir la pestaña.
 
 ## Métricas
 
@@ -146,6 +163,7 @@ js/
     plan.js           Plan de producción (aprobación de Gerencia, editar, rolar)
     bom.js            BOM por ensamble
     lineas.js         Estado de líneas
+    layout.js         Layout de planta: plano con el estado de cada estación y su edición
     surtido.js        Surtido por estación, paros, reconteos e inicio de ensambles
     metricas.js       Métricas: filtros de periodo, Resumen y Reportes
     reportes.js       Reportes de la sección Reportes de Métricas (tabla y descarga a Excel o CSV)

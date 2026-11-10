@@ -7,17 +7,18 @@ function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.p
   anticipacion:c.anticipacionHoras!=null?Math.max(0,Number(c.anticipacionHoras)||0):c.anticipacion!=null?Math.max(0,Number(c.anticipacion)||0)*24:DEFAULT_CFG.anticipacionHoras, turnos:Object.assign({},DEFAULT_CFG.turnos,c.turnos||{})}; }
 
 const ROLES={
-  admin:{label:"Administrador",tabs:["lineas","surtido","plan","bom","metricas","gafetes","ajustes"]},
-  planeador:{label:"Planeador",tabs:["plan","bom","lineas","surtido","metricas"]},
-  materialista:{label:"Materialista",tabs:["lineas","surtido"]},
-  lider:{label:"Líder de línea",tabs:["lineas","surtido","metricas"]},
-  gerente:{label:"Gerencia",tabs:["plan","lineas","surtido","metricas"]},
-  supervisor:{label:"Supervisor",tabs:["lineas","metricas","surtido","plan"]},
+  admin:{label:"Administrador",tabs:["lineas","layout","surtido","plan","bom","metricas","gafetes","ajustes"]},
+  planeador:{label:"Planeador",tabs:["plan","bom","lineas","layout","surtido","metricas"]},
+  materialista:{label:"Materialista",tabs:["lineas","layout","surtido"]},
+  lider:{label:"Líder de línea",tabs:["lineas","layout","surtido","metricas"]},
+  gerente:{label:"Gerencia",tabs:["plan","lineas","layout","surtido","metricas"]},
+  supervisor:{label:"Supervisor",tabs:["lineas","layout","metricas","surtido","plan"]},
   receptor:{label:"Recibe material (sin acceso)",tabs:[]}
 };
 // Íconos del menú lateral (trazo, heredan el color del texto).
 const TAB_ICON={
   lineas:'<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
+  layout:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h7v11M10 3v7M14 14h7M14 14v7"/>',
   surtido:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
   plan:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
   bom:'<path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="18" r="1.2"/>',
@@ -25,12 +26,12 @@ const TAB_ICON={
   gafetes:'<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M8 17c1-2 2.5-3 4-3s3 1 4 3"/>',
   ajustes:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>'
 };
-const TAB_LABEL={lineas:"Líneas",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",gafetes:"Usuarios",ajustes:"Ajustes"};
+const TAB_LABEL={lineas:"Líneas",layout:"Layout",surtido:"Surtido",plan:"Plan de producción",bom:"BOM",metricas:"Métricas",gafetes:"Usuarios",ajustes:"Ajustes"};
 // Privilegios configurables por rol (Ajustes → Permisos por rol, guardados en sl_config "permisos").
 // El administrador los tiene todos y es el único con Usuarios y Ajustes (la base solo le deja escribir gafetes a él);
 // "Recibe material" no entra a la app. Sin configuración, cada rol conserva los privilegios de ROLES y PERM_DEFAULT.
 const PRIVS=[
-  {k:"tab:lineas",g:"Pestañas",l:"Líneas"},{k:"tab:surtido",g:"Pestañas",l:"Surtido"},{k:"tab:plan",g:"Pestañas",l:"Plan de producción"},
+  {k:"tab:lineas",g:"Pestañas",l:"Líneas"},{k:"tab:layout",g:"Pestañas",l:"Layout"},{k:"tab:surtido",g:"Pestañas",l:"Surtido"},{k:"tab:plan",g:"Pestañas",l:"Plan de producción"},
   {k:"tab:bom",g:"Pestañas",l:"BOM"},{k:"tab:metricas",g:"Pestañas",l:"Métricas"},
   {k:"editPlan",g:"Acciones",l:"Modificar el plan (agregar, editar, quitar, rolar, Excel)",tab:"plan"},
   {k:"approve",g:"Acciones",l:"Aprobar cambios al plan y modificarlo sin aprobación",tab:"plan"},
@@ -40,7 +41,7 @@ const PRIVS=[
 ];
 const ROLES_CONFIG=["planeador","gerente","materialista","lider","supervisor"];
 const PERM_DEFAULT={editPlan:["planeador","gerente"],approve:["gerente"],editBom:["planeador"],confirm:["materialista","lider"],ops:["planeador","materialista","lider"]};
-const TAB_ORDER=["lineas","surtido","plan","bom","metricas"];
+const TAB_ORDER=["lineas","layout","surtido","plan","bom","metricas"];
 function defaultPerms(rol){
   const o={}; PRIVS.forEach(p=>{ o[p.k]=p.k.startsWith("tab:")?ROLES[rol].tabs.includes(p.k.slice(4)):PERM_DEFAULT[p.k].includes(rol); }); return o;
 }
