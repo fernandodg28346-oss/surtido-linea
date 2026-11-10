@@ -20,13 +20,23 @@ function lineBoard(fecha,turno,now){
     l.pend.sort((a,b)=>b.min-a.min); return l;
   }).sort((a,b)=>(b.due-a.due)||a.linea.localeCompare(b.linea,undefined,{numeric:true}));
 }
+// Vista de Líneas: tarjetas (estado y resurtidos por línea) o layout (mapa de planta). Cada equipo recuerda la elegida.
+try{ S.sel.vistaLineas=localStorage.getItem("sl_vista_lineas")==="layout"?"layout":"tarjetas"; }catch(e){ S.sel.vistaLineas="tarjetas"; }
+function vistaLineasSwitch(){
+  return `<div class="seg" role="group" aria-label="Vista">${[["tarjetas","Tarjetas"],["layout","Layout"]].map(([k,l])=>
+    `<button type="button" data-vista="${k}" aria-pressed="${S.sel.vistaLineas===k}">${l}</button>`).join("")}</div>`;
+}
+function bindVistaLineas(app){
+  app.querySelectorAll("[data-vista]").forEach(b=>b.onclick=()=>{ S.sel.vistaLineas=b.dataset.vista; try{ localStorage.setItem("sl_vista_lineas",b.dataset.vista); }catch(e){} render(); });
+}
 function viewLineas(app){
+  if(S.sel.vistaLineas==="layout") return viewLayout(app);
   const c=cfg(), now=Date.now(), lines=lineBoard(S.sel.fecha,S.sel.turno,now);
   const al100=lines.filter(l=>l.state==="ok"||l.state==="soon").length, falt=lines.filter(l=>l.state==="due").length;
   const pendNP=lines.reduce((n,l)=>n+l.due,0);
   const pill={ok:'<span class="pill p-ok">Al 100%</span>',soon:'<span class="pill p-warn">Al 100% · surtido próximo</span>',due:'<span class="pill p-bad">Falta resurtir</span>',err:'<span class="pill p-idle">Falta BOM o UPH en el plan</span>',stop:'<span class="pill p-warn">Línea detenida</span>',wait:'<span class="pill p-idle">Esperando arranque</span>'};
   app.innerHTML=`
-  <div class="view-head"><div><h2>Estado de líneas</h2><p>Una línea está al 100% cuando todos los surtidos que ya tocaban están confirmados. Las que tienen surtidos vencidos aparecen primero.</p></div></div>
+  <div class="view-head"><div><h2>Estado de líneas</h2><p>Una línea está al 100% cuando todos los surtidos que ya tocaban están confirmados. Las que tienen surtidos vencidos aparecen primero.</p></div>${vistaLineasSwitch()}</div>
   <div class="filters">
     <div class="fld"><label for="l-fecha">Fecha</label><input type="date" id="l-fecha" value="${S.sel.fecha}"></div>
     <div class="fld"><label for="l-turno">Turno</label><select id="l-turno"><option value="">Todos</option>${Object.keys(c.turnos).map(t=>`<option ${S.sel.turno===t?"selected":""}>${t}</option>`).join("")}</select></div>
@@ -55,6 +65,7 @@ function viewLineas(app){
       </div>
     </section>`).join("")}</div>`
   :`<div class="panel empty">No hay plan para ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}. ${can.editPlan()?"Cárgalo en la pestaña Plan de producción.":"Pide al planeador que cargue el plan."}</div>`}`;
+  bindVistaLineas(app);
   document.getElementById("l-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
   document.getElementById("l-turno").onchange=e=>{S.sel.turno=e.target.value;render();};
   app.querySelectorAll("[data-go-line]").forEach(b=>b.onclick=()=>{S.sel.linea=b.dataset.goLine; S.view="surtido"; render();});

@@ -19,6 +19,7 @@ function render(soft){
   if(soft && document.querySelector(".scrim")) return;
   const active=document.activeElement; if(soft && active && active.matches("input,select") && app.contains(active)) return;
   top.hidden=false;
+  if(S.view==="layout"){ S.view="lineas"; S.sel.vistaLineas="layout"; } // el layout antes era una pestaña aparte
   if(!tabs.includes(S.view)) S.view=tabs[0];
   const nPend=Object.values(S.plan).filter(p=>p.pendiente).length;
   document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""} title="${TAB_LABEL[t]}" aria-label="${TAB_LABEL[t]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICON[t]}</svg><span class="t">${TAB_LABEL[t]}</span>${t==="plan"&&can.approve()&&nPend?`<span class="tab-n" title="${nPend} pendiente(s) de aprobación">${nPend}</span>`:""}</button>`).join("");
@@ -29,7 +30,7 @@ function render(soft){
     <button id="theme" title="Cambiar tema" aria-label="Cambiar a tema ${curTheme()==="dark"?"claro":"oscuro"}">${curTheme()==="dark"?ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')+'<span class="t">Claro</span>':ic('<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>')+'<span class="t">Oscuro</span>'}</button>
     <button id="logout" title="Salir (${esc(S.me.nombre)})" aria-label="Salir">${ic('<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>')}<span class="t">Salir</span></button></div>`;
   document.getElementById("conn").textContent="● "+Store.email;
-  ({lineas:viewLineas,layout:viewLayout,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,gafetes:viewGafetes,ajustes:viewAjustes})[S.view](app);
+  ({lineas:viewLineas,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,gafetes:viewGafetes,ajustes:viewAjustes})[S.view](app);
 }
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-tab]"); if(t){ S.view=t.dataset.tab; render(); return; }

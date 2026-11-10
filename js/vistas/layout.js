@@ -1,4 +1,4 @@
-/* ===================== Layout: mapas de planta con las estaciones de surtido =====================
+/* ===================== Layout: mapas de planta con las estaciones de surtido (vista "Layout" de la pestaña Líneas) =====================
    sl_config "layout": {mapas:[{id,nombre,img:{w,h,v,key},zonas:[{id,linea,estacion,etiqueta,x,y,w,h}]}]}, con x, y, w, h en
    fracción del plano (0–1). Cada mapa es un site o un área. La imagen de cada mapa va aparte en sl_config img.key
    ({data: data URL}) y solo se lee al abrir esta pestaña. El formato anterior (un solo plano: {img, zonas} con la imagen
@@ -26,7 +26,7 @@ async function cargarImagenMapa(m){
   try{ const {data,error}=await Store.sb.from("sl_config").select("data").eq("id",im.key).maybeSingle();
     if(error) throw error; LY.imgs[im.key]={v:im.v,url:data?.data?.data||""}; }
   catch(e){ toast("No se pudo cargar el plano ("+(e.message||e.code)+")."); }
-  finally{ LY.cargando.delete(im.key); if(S.view==="layout") render(); }
+  finally{ LY.cargando.delete(im.key); if(S.view==="lineas"&&S.sel.vistaLineas==="layout") render(); }
 }
 // Estado de cada zona a partir del tablero de líneas (mismo cálculo que la pestaña Líneas).
 function estadoZona(z,board){
@@ -53,9 +53,9 @@ function viewLayout(app){
   const selector=L.mapas.length?`<div class="fld"><label for="y-mapa">Mapa</label><select id="y-mapa">${L.mapas.map(mp=>{ const n=editando?0:vencidas(mp);
     return `<option value="${esc(mp.id)}" ${mp.id===m?.id?"selected":""}>${esc(mp.nombre)}${n?` · ${n} vencida${n>1?"s":""}`:""}</option>`; }).join("")}</select></div>`:"";
   app.innerHTML=`
-  <div class="view-head"><div><h2>Layout de planta</h2><p>${editando?"Arrastra sobre el plano para marcar una estación. Toca una zona para cambiarla; arrástrala para moverla o usa la esquina para cambiar su tamaño.":"Cada estación se colorea con su estado de surtido. Toca una para ver qué NP surtir."}</p></div>
-    ${can.admin()?`<div class="row">${editando?`<button class="btn" id="ly-cancel">${LY.draft?"Cancelar":"Terminar"}</button><button class="btn pri" id="ly-save" ${LY.draft?"":"disabled"}>Guardar estaciones</button>`
-      :`<button class="btn" id="ly-edit">Editar layout</button>`}</div>`:""}</div>
+  <div class="view-head"><div><h2>Estado de líneas</h2><p>${editando?"Arrastra sobre el plano para marcar una estación. Toca una zona para cambiarla; arrástrala para moverla o usa la esquina para cambiar su tamaño.":"Cada estación se colorea con su estado de surtido. Toca una para ver qué NP surtir."}</p></div>
+    <div class="row">${editando?"":vistaLineasSwitch()}${can.admin()?`${editando?`<button class="btn" id="ly-cancel">${LY.draft?"Cancelar":"Terminar"}</button><button class="btn pri" id="ly-save" ${LY.draft?"":"disabled"}>Guardar estaciones</button>`
+      :`<button class="btn" id="ly-edit">Editar layout</button>`}`:""}</div></div>
   ${editando?`<div class="filters ly-mapas">${selector}
     <button class="btn" id="ly-new">Nuevo mapa</button>
     ${m?`<button class="btn" id="ly-ren">Renombrar</button><label class="btn file-btn">${img?"Cambiar plano":"Subir plano"}<input type="file" id="ly-file" accept="image/*"></label><button class="btn danger" id="ly-delmap">Eliminar mapa</button>`:""}
@@ -74,6 +74,7 @@ function viewLayout(app){
     ${zonas.map(z=>`<button class="ly-zona ly-${z.e.k} ${LY.sel===z.id?"sel":""}" data-zona="${esc(z.id)}" style="left:${z.x*100}%;top:${z.y*100}%;width:${z.w*100}%;height:${z.h*100}%"
       title="${esc(zonaNombre(z))}: ${esc(LY_ESTADO[z.e.k]?.l||"")}${z.e.pend?.length?` (${z.e.pend.length} vencido${z.e.pend.length>1?"s":""})`:""}"><span>${z.etiqueta?`<b>${esc(z.etiqueta)}</b>`:z.estacion?`<b>${esc(z.estacion)}</b> <small>${esc(z.linea)}</small>`:`<b>${esc(z.linea)}</b>`}</span>${!editando&&z.e.pend?.length?`<em class="ly-n">${z.e.pend.length}</em>`:""}${editando?'<i class="ly-asa" data-asa="1"></i>':""}</button>`).join("")}
   </div></div>`}`;
+  bindVistaLineas(app);
   const on=(id,ev,fn)=>{ const el=document.getElementById(id); if(el) el[ev]=fn; };
   on("y-mapa","onchange",e=>{ elegirMapa(e.target.value); LY.sel=null; render(); });
   on("y-fecha","onchange",e=>{S.sel.fecha=e.target.value;render();});
