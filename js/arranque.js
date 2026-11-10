@@ -18,9 +18,11 @@
   if(mine.data.rol==="receptor"||!ROLES[mine.data.rol]) return renderNoAccess(app,mine.data);
   const pending=new Set(["gafetes","bom","plan","config","surtidos","eventos"]);
   const first=c=>m=>{ S[c]=m; pending.delete(c); if(!pending.size) S.ready=true; if(S.ready) render(); };
-  ["gafetes","bom","plan","config"].forEach(c=>Store.watch(c,first(c)));
+  ["gafetes","bom","plan"].forEach(c=>Store.watch(c,first(c)));
+  // La imagen del layout es pesada: se lee aparte, solo en la pestaña Layout.
+  Store.watch("config",first("config"),{sinId:"layout_img"});
   watchDia(first);
-  setInterval(()=>{ if(["surtido","metricas","lineas"].includes(S.view)) render(true); },30000);
+  setInterval(()=>{ if(["surtido","metricas","lineas"].includes(S.view)||(S.view==="layout"&&!LY.edit)) render(true); },30000);
 })();
 // Los surtidos y los eventos (paros, reconteos) se leen solo para la fecha seleccionada.
 let diaUnsub=[], surtFecha=null;

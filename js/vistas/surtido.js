@@ -38,7 +38,7 @@ function viewSurtido(app){
   ${ctlLines.length?`<div class="panel" style="margin-bottom:16px"><div class="ph"><h3>Control de línea</h3><span class="muted small">Paros y arranques recorren el programa de surtido</span></div>
     ${ctlLines.map(l=>lineCtl(l,shown.filter(p=>p.linea===l),now)).join("")}</div>`:""}
   ${stList.length?`<div class="stations">${stList.map(st=>`
-    <section class="panel station"><div class="ph"><h3><span class="st-id">${esc(st.linea)}</span> Estación ${esc(st.estacion)}</h3><span class="muted small">${st.rows.length} NP</span></div>
+    <section class="panel station" id="st-${esc(safeId(st.linea+"|"+st.estacion))}"><div class="ph"><h3><span class="st-id">${esc(st.linea)}</span> Estación ${esc(st.estacion)}</h3><span class="muted small">${st.rows.length} NP</span></div>
     ${st.rows.map(r=>npRow(r,now)).join("")}</section>`).join("")}</div>`
   :shown.length?"":`<div class="panel empty">No hay plan para ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}. ${can.editPlan()?"Cárgalo en la pestaña Plan de producción.":"Pide al planeador que cargue el plan."}</div>`}`;
   document.getElementById("s-fecha").onchange=e=>{S.sel.fecha=e.target.value;render();};
@@ -53,6 +53,8 @@ function viewSurtido(app){
     openRecount(p,computeItems(p).items.find(x=>x.estacion===est&&x.np===np));
   });
   bindLineOps(app);
+  // Desde el layout: lleva a la estación tocada en el plano.
+  if(S.sel.focoSt){ const el=document.getElementById("st-"+safeId(S.sel.focoSt)); S.sel.focoSt=""; if(el){ el.scrollIntoView({block:"start"}); el.classList.add("foco"); } }
 }
 // Fila de control por línea: paro/reanudación y arranque de cada ensamble del plan.
 function lineCtl(linea,plans,now){
