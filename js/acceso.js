@@ -128,4 +128,4 @@ function openChangePassword(){
     if(error) return err.textContent=authError(error);
     close(); toast("Contraseña actualizada."); };
 }
-const bindOut=()=>{ const b=document.getElementById("a-out"); if(b) b.onclick=()=>Store.sb.auth.signOut(); };
+const bindOut=()=>{ const b=document.getElementById("a-out"); if(b) b.onclick=logout; };
