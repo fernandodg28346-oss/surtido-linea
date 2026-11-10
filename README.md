@@ -186,6 +186,7 @@ El esquema de la base está en [`supabase/migrations/`](supabase/migrations/).
 
 ```
 index.html            Estructura de la página y orden de carga de los scripts
+img/                  Logotipo de la barra (logo.svg) e íconos de la pestaña y de la pantalla de inicio
 css/estilos.css       Estilos (tema claro y oscuro, menú lateral, tablero)
 js/
   config.js           URL y clave pública de Supabase
