@@ -22,7 +22,12 @@ function render(soft){
   if(!tabs.includes(S.view)) S.view=tabs[0];
   const nPend=Object.values(S.plan).filter(p=>p.pendiente).length;
   document.getElementById("tabs").innerHTML=tabs.map(t=>`<button data-tab="${t}" ${S.view===t?'aria-current="page"':""} title="${TAB_LABEL[t]}" aria-label="${TAB_LABEL[t]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TAB_ICON[t]}</svg><span class="t">${TAB_LABEL[t]}</span>${t==="plan"&&can.approve()&&nPend?`<span class="tab-n" title="${nPend} pendiente(s) de aprobación">${nPend}</span>`:""}</button>`).join("");
-  document.getElementById("who").innerHTML=`<span class="nm">${esc(S.me.nombre)}</span><span class="role">${esc(ROLES[S.me.rol].label)}</span><button id="logout" title="Salir (${esc(S.me.nombre)})" aria-label="Salir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span class="t">Salir</span></button><button id="chpass" title="Cambiar contraseña" aria-label="Cambiar contraseña"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg><span class="t">Contraseña</span></button>`;
+  const sinLeer=S.avisos.filter(a=>!a.leido).length, ic=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  document.getElementById("who").innerHTML=`<span class="nm" title="${esc(Store.email)}">${esc(S.me.nombre)}</span><span class="role">${esc(ROLES[S.me.rol].label)}</span>
+    <div class="acts"><button id="avisos" title="Avisos" aria-label="Avisos${sinLeer?": "+sinLeer+" sin leer":""}">${ic('<path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 003.4 0"/>')}<span class="t">Avisos</span>${sinLeer?`<span class="tab-n">${sinLeer}</span>`:""}</button>
+    <button id="chpass" title="Cambiar contraseña" aria-label="Cambiar contraseña">${ic('<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>')}<span class="t">Contraseña</span></button>
+    <button id="theme" title="Cambiar tema" aria-label="Cambiar a tema ${curTheme()==="dark"?"claro":"oscuro"}">${curTheme()==="dark"?ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')+'<span class="t">Claro</span>':ic('<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>')+'<span class="t">Oscuro</span>'}</button>
+    <button id="logout" title="Salir (${esc(S.me.nombre)})" aria-label="Salir">${ic('<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>')}<span class="t">Salir</span></button></div>`;
   document.getElementById("conn").textContent="● "+Store.email;
   ({lineas:viewLineas,layout:viewLayout,surtido:viewSurtido,plan:viewPlan,bom:viewBom,metricas:viewMetricas,gafetes:viewGafetes,ajustes:viewAjustes})[S.view](app);
 }
@@ -30,16 +35,12 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("[data-tab]"); if(t){ S.view=t.dataset.tab; render(); return; }
   if(e.target.closest("#logout")) logout();
   if(e.target.closest("#chpass")) openChangePassword();
-  if(e.target.closest("#side-toggle")) setMenuCollapsed(!document.querySelector(".shell").classList.contains("collapsed"));
+  if(e.target.closest("#avisos")) openAvisos();
+  if(e.target.closest("#theme")){ setTheme(curTheme()==="dark"?"light":"dark"); render(); }
 });
 
-// Menú lateral contraído o expandido; cada equipo recuerda cómo lo dejó.
-function setMenuCollapsed(c){
-  document.querySelector(".shell").classList.toggle("collapsed",c);
-  const b=document.getElementById("side-toggle"), lbl=c?"Expandir menú":"Contraer menú";
-  b.setAttribute("aria-expanded",String(!c)); b.setAttribute("aria-label",lbl); b.title=lbl;
-  try{ localStorage.setItem("sl_menu_contraido",c?"1":"0"); }catch(e){}
-}
-try{ if(localStorage.getItem("sl_menu_contraido")==="1") setMenuCollapsed(true); }catch(e){}
+// Tema claro u oscuro: sin elegir, sigue al del sistema; cada equipo recuerda el que eligió.
+const curTheme=()=>{ const t=document.documentElement.getAttribute("data-theme"); return t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"); };
+function setTheme(t){ document.documentElement.setAttribute("data-theme",t); try{ localStorage.setItem("sl_tema",t); }catch(e){} }
 
 const ffv=id=>document.getElementById(id).value.trim();

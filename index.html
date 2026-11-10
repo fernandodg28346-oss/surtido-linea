@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Surtido de Línea</title>
+<!-- Tema elegido en este equipo (claro u oscuro), antes de pintar para que no parpadee -->
+<script>try{const t=localStorage.getItem("sl_tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -15,8 +17,7 @@
 
 <div class="shell">
 <aside class="side" id="top" hidden>
-  <div class="brand"><div class="brand-t"><h1>Surtido de Línea</h1><span class="tag" id="conn"></span></div>
-    <button class="side-toggle" id="side-toggle" aria-controls="tabs" aria-expanded="true" aria-label="Contraer menú" title="Contraer menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button></div>
+  <div class="brand"><div class="brand-t"><h1>Surtido de Línea</h1><span class="tag" id="conn"></span></div></div>
   <nav class="tabs" id="tabs" aria-label="Menú"></nav>
   <div class="who" id="who"></div>
 </aside>
@@ -30,6 +31,7 @@
 <script src="js/calculo.js"></script>
 <script src="js/sesion.js"></script>
 <script src="js/acceso.js"></script>
+<script src="js/avisos.js"></script>
 <script src="js/grafica.js"></script>
 <script src="js/vistas/plan.js"></script>
 <script src="js/vistas/bom.js"></script>
