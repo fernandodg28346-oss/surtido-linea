@@ -292,3 +292,9 @@ td.num,th.num{text-align:right}
 .av-item.nuevo .dot{background:var(--accent)}
 .av-item.nuevo b{font-weight:700}
 .av-item .av-t{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+
+/* Selector de vista (Líneas: Tarjetas / Layout) */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.seg button{font:600 13px var(--f-body);padding:7px 14px;border:0;background:transparent;color:var(--ink-2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
