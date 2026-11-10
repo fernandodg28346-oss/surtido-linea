@@ -19,8 +19,8 @@
   const pending=new Set(["gafetes","bom","plan","config","surtidos","eventos"]);
   const first=c=>m=>{ S[c]=m; pending.delete(c); if(!pending.size) S.ready=true; if(S.ready) render(); };
   ["gafetes","bom","plan"].forEach(c=>Store.watch(c,first(c)));
-  // La imagen del layout es pesada: se lee aparte, solo en la pestaña Layout.
-  Store.watch("config",first("config"),{sinId:"layout_img"});
+  // Las imágenes de los mapas del layout son pesadas: se leen aparte, solo en la pestaña Layout.
+  Store.watch("config",first("config"),{sinPrefijo:"layout_img"});
   watchDia(first);
   setInterval(()=>{ if(["surtido","metricas","lineas"].includes(S.view)||(S.view==="layout"&&!LY.edit)) render(true); },30000);
 })();

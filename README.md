@@ -93,7 +93,7 @@ Cada ensamble del plan lleva su WO, obligatoria al agregarlo (a mano o por Excel
 
 ## Layout de planta
 
-La pestaña **Layout** muestra el plano de la planta con cada estación de surtido marcada como un rectángulo, coloreado con su estado del día y turno elegidos (mismo cálculo que **Líneas**):
+La pestaña **Layout** muestra los mapas de planta (uno por site o área, se elige en **Mapa**) con cada estación de surtido marcada como un rectángulo, coloreado con su estado del día y turno elegidos (mismo cálculo que **Líneas**):
 
 | Color | Estado |
 |---|---|
@@ -104,9 +104,15 @@ La pestaña **Layout** muestra el plano de la planta con cada estación de surti
 
 Al tocar una estación se ven los NP pendientes y **Ir a surtir** abre la pestaña Surtido en esa estación.
 
-**Configuración (solo administrador):** **Editar layout** → **Subir plano** (JPG o PNG; se reduce a 2400 px por lado). Se arrastra sobre el plano para marcar cada estación y se elige su línea y estación (vacía = toda la línea), con un nombre opcional. Las zonas se mueven arrastrándolas y cambian de tamaño desde la esquina; al tocar una se edita o se quita. **Guardar layout** aplica los cambios para todos. La estación debe escribirse igual que en el BOM.
+**Configuración (solo administrador):** en **Editar layout**:
 
-Se guarda en `sl_config`: `layout` (tamaño del plano y zonas, en fracciones del plano, así que se conservan al cambiar la imagen) y `layout_img` (la imagen). La imagen no se lee con el resto de la configuración: solo al abrir la pestaña.
+- **Nuevo mapa**, **Renombrar** y **Eliminar mapa** administran los mapas (el nombre suele ser el site o el área, p. ej. *GDL Norte · B2*). Eliminar un mapa borra su plano y sus estaciones.
+- **Subir plano** / **Cambiar plano**: imagen JPG o PNG del mapa elegido; se reduce a 2400 px por lado.
+- Se arrastra sobre el plano para marcar cada estación y se elige su línea y estación (vacía = toda la línea), con un nombre opcional. Las zonas se mueven arrastrándolas y cambian de tamaño desde la esquina; al tocar una se edita o se quita. **Guardar estaciones** aplica los cambios para todos. La estación debe escribirse igual que en el BOM.
+
+Crear, renombrar o eliminar un mapa y subir su plano se guardan al momento. En el selector de mapa, cada uno indica cuántas estaciones tiene vencidas. Cada equipo recuerda el último mapa que eligió.
+
+Se guarda en `sl_config`: `layout` (`mapas`: nombre, tamaño del plano y zonas de cada uno, en fracciones del plano, así que se conservan al cambiar la imagen) y un documento por imagen (`layout_img_<mapa>`; el primer mapa usa `layout_img`). Las imágenes no se leen con el resto de la configuración: solo la del mapa abierto en la pestaña. El formato anterior, de un solo plano, se lee como el mapa *Planta*.
 
 ## Métricas
 

@@ -8,7 +8,7 @@ const Store={
     for(;;){
       let q=this.sb.from("sl_"+col).select("id,data");
       if(filter?.field) q=q.eq("data->>"+filter.field,filter.value);
-      if(filter?.sinId) q=q.neq("id",filter.sinId);
+      if(filter?.sinPrefijo) q=q.not("id","like",filter.sinPrefijo+"%");
       const {data,error}=await q.order("id").range(from,from+999);
       if(error) throw error;
       data.forEach(r=>{out[r.id]=Object.assign({},r.data,{_id:r.id});});
