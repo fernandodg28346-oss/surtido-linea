@@ -22,6 +22,7 @@
   // Las imágenes de los mapas del layout son pesadas: se leen aparte, solo en la pestaña Layout.
   Store.watch("config",first("config"),{sinPrefijo:"layout_img"});
   watchDia(first);
+  watchAvisos();
   setInterval(()=>{ if(["surtido","metricas","lineas"].includes(S.view)||(S.view==="layout"&&!LY.edit)) render(true); },30000);
 })();
 // Los surtidos y los eventos (paros, reconteos) se leen solo para la fecha seleccionada.

@@ -1,5 +1,5 @@
 /* ===================== Estado ===================== */
-const S={gafetes:{},bom:{},plan:{},surtidos:{},eventos:{},config:{},
+const S={gafetes:{},bom:{},plan:{},surtidos:{},eventos:{},config:{},avisos:[],
   me:null, view:null, sel:{fecha:today(),turno:"",linea:"",bom:null,bomDel:new Set()}, ready:false};
 const DEFAULT_CFG={pct:20, tolerancia:10, anticipacionHoras:24, turnos:{T1:{inicio:"06:00",fin:"14:00"},T2:{inicio:"14:00",fin:"22:00"},T3:{inicio:"22:00",fin:"06:00"}}};
 function cfg(){ const c=S.config.general||{}; return {pct:Math.max(20,Number(c.pct)||20), tolerancia:Number(c.tolerancia)||DEFAULT_CFG.tolerancia,

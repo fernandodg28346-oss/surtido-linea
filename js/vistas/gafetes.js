@@ -44,7 +44,7 @@ function viewGafetes(app){
       <thead><tr><th>Gafete</th><th>Nombre</th><th>Cuenta</th><th>Área</th><th>Rol</th><th></th></tr></thead>
       <tbody>${us.length?us.map(u=>`<tr><td class="mono">${esc(u.gafete)}</td><td>${esc(u.nombre)}</td><td class="small">${u.user_id?esc(u.email||"Con cuenta"):'<span class="muted">Sin cuenta</span>'}</td><td>${esc(u.area||"")}</td>
         <td><select data-rol="${u._id}" aria-label="Rol de ${esc(u.nombre)}" ${u.gafete===S.me.gafete?"disabled":""}>${roleOpts(u.rol)}</select></td>
-        <td>${u.gafete===S.me.gafete?'<span class="muted small">Tú</span>':`<div class="row" style="flex-wrap:nowrap">${u.user_id?`<button class="btn ghost" data-unlink="${u._id}" title="La cuenta deja de entrar; el gafete se conserva para recibir material">Quitar acceso</button>`:""}<button class="btn danger" data-del-user="${u._id}">Dar de baja</button></div>`}</td></tr>`).join(""):`<tr><td colspan="6" class="empty">Ningún gafete coincide con la búsqueda.</td></tr>`}</tbody></table></div></div>
+        <td>${u.gafete===S.me.gafete?'<span class="muted small">Tú</span>':`<div class="row" style="flex-wrap:nowrap">${u.user_id?`<button class="btn ghost" data-reset="${u._id}" title="Le pone una contraseña temporal; al entrar debe crear la suya">Restablecer contraseña</button><button class="btn ghost" data-unlink="${u._id}" title="La cuenta deja de entrar; el gafete se conserva para recibir material">Quitar acceso</button>`:""}<button class="btn danger" data-del-user="${u._id}">Dar de baja</button></div>`}</td></tr>`).join(""):`<tr><td colspan="6" class="empty">Ningún gafete coincide con la búsqueda.</td></tr>`}</tbody></table></div></div>
   </div>`;
   const gq=document.getElementById("g-q");
   gq.oninput=()=>{ S.sel.qGaf=gq.value; const pos=gq.selectionStart; render(); const n=document.getElementById("g-q"); n.focus(); n.setSelectionRange(pos,pos); };
@@ -66,6 +66,7 @@ function viewGafetes(app){
     toast(`Gafetes: ${n} registrados o actualizados${bad?`, ${bad} filas sin gafete o nombre`:""}.`);
   });
   app.querySelectorAll("[data-rol]").forEach(s=>s.onchange=()=>{const u=S.gafetes[s.dataset.rol]; safeWrite(()=>Store.set("gafetes",u._id,Object.assign({},u,{rol:s.value})));});
+  app.querySelectorAll("[data-reset]").forEach(b=>b.onclick=()=>openResetPass(S.gafetes[b.dataset.reset]));
   app.querySelectorAll("[data-unlink]").forEach(b=>b.onclick=()=>{ const u=S.gafetes[b.dataset.unlink];
     confirmBox(`¿Quitar el acceso de ${u.nombre} (${u.email||"cuenta"})? Ya no podrá entrar a la app; su gafete se conserva para recibir material.`,"Quitar acceso",()=>{
       const n=Object.assign({},u); delete n.user_id; delete n.email; return safeWrite(()=>Store.set("gafetes",u._id,n)); }); });
@@ -132,4 +133,36 @@ function showCredentials(b,email,existente){
   document.getElementById("cr-ok").onclick=()=>{ root.innerHTML=""; loadSolicitudes(true); };
   const cp=document.getElementById("cr-copy");
   if(cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(`Surtido de Línea\nCorreo: ${email}\nContraseña inicial: ${b.password}`); toast("Datos copiados."); }catch(x){ toast("No se pudo copiar; anótalos."); } };
+}
+// Restablecer contraseña: el administrador le pone una contraseña temporal a la cuenta (función sl-restablecer-contrasena);
+// al entrar, la app le pide crear la suya. Sirve cuando el correo de recuperación no le llega.
+function openResetPass(u){
+  if(!u?.user_id) return;
+  const root=document.getElementById("modal-root");
+  root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="rp-t">
+    <div class="ph"><h3 id="rp-t">Restablecer contraseña</h3><button class="btn ghost" id="rp-x">Cancelar</button></div>
+    <form class="pb" id="f-rp">
+      <div class="note"><b>${esc(u.nombre)}</b> · ${esc(u.email||"cuenta ligada")}<br>Su contraseña actual deja de funcionar. Al entrar con la temporal, la app le pedirá crear una propia.</div>
+      <div class="fld"><label for="rp-p">Contraseña temporal</label>
+        <div class="row" style="flex-wrap:nowrap"><input id="rp-p" class="mono" style="flex:1" value="${newPassword()}" minlength="8" required autocomplete="off"><button type="button" class="btn" id="rp-gen">Generar otra</button></div></div>
+      <p class="small muted" style="margin:0">Es la misma cuenta de Control de Personal: la contraseña nueva también aplica ahí.</p>
+      <div class="err" id="rp-err"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn pri">Restablecer</button></div>
+    </form></div></div>`;
+  const close=()=>root.innerHTML="", err=m=>document.getElementById("rp-err").textContent=m;
+  document.getElementById("rp-x").onclick=close;
+  document.getElementById("rp-gen").onclick=()=>{ document.getElementById("rp-p").value=newPassword(); };
+  document.getElementById("f-rp").onsubmit=async e=>{ e.preventDefault();
+    const password=document.getElementById("rp-p").value, btn=e.target.querySelector("button.pri"); btn.disabled=true; err("");
+    const {data,error}=await Store.sb.functions.invoke("sl-restablecer-contrasena",{body:{user_id:u.user_id,password}});
+    if(error){ let m=error.message; try{ m=(await error.context.json()).error||m; }catch(x){} btn.disabled=false; return err(m); }
+    const email=data?.email||u.email||"";
+    root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="rp2-t">
+      <div class="ph"><h3 id="rp2-t">Contraseña restablecida</h3></div>
+      <div class="pb"><div class="note">Entrégale estos datos a <b>${esc(u.nombre)}</b>. Al entrar, la app le pedirá crear su propia contraseña.<br><br>
+        Correo: <b class="mono">${esc(email)}</b><br>Contraseña temporal: <b class="mono">${esc(password)}</b></div>
+        <div class="row" style="justify-content:flex-end"><button class="btn" id="rp-copy">Copiar datos</button><button class="btn pri" id="rp-ok">Listo</button></div></div></div></div>`;
+    document.getElementById("rp-ok").onclick=close;
+    document.getElementById("rp-copy").onclick=async()=>{ try{ await navigator.clipboard.writeText(`Surtido de Línea\nCorreo: ${email}\nContraseña temporal: ${password}`); toast("Datos copiados."); }catch(x){ toast("No se pudo copiar; anótalos."); } };
+  };
 }

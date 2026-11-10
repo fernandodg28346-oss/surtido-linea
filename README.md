@@ -11,6 +11,8 @@ App web para el surtido de materiales a líneas de producción: plan de producci
 2. **Aprobación:** el administrador revisa la solicitud en **Usuarios** y la aprueba con un rol y una **contraseña inicial** que le entrega a la persona; la app crea la cuenta y la liga a su gafete. En su primer ingreso, la app le pide crear su propia contraseña. Cualquiera puede cambiarla después con **Contraseña** en el menú.
 3. **Surtido:** el materialista o el líder de línea presiona **Confirmar surtido** y quien recibe en línea escanea su gafete. Con eso queda registrado quién surtió, quién recibió y a qué hora.
 
+En el menú, cada quien tiene **Avisos**, **Contraseña**, **Claro/Oscuro** (tema; sin elegir, sigue al del equipo, y cada equipo recuerda el que eligió) y **Salir**. En escritorio el menú es una barra angosta de íconos que se expande al pasar el cursor; en celular va arriba, con las pestañas en una fila deslizable.
+
 Estos son los permisos por defecto; el administrador los ajusta en **Ajustes → Permisos por rol**.
 
 | Rol | Acceso |
@@ -39,6 +41,8 @@ where u.email = 'tu-correo@empresa.com' and g.id = 'NUMERO_DE_GAFETE';
 A partir de ahí, el administrador aprueba las solicitudes en **Usuarios**. El registro abierto de Supabase ("Allow new users to sign up") se mantiene desactivado porque el proyecto lo comparte otra app; las cuentas las crea la función `sl-aprobar-acceso` al aprobar.
 
 ### Función de aprobación
+
+**Restablecer contraseña:** si a alguien no le llega el correo de recuperación (sin SMTP propio solo llega a los miembros del proyecto de Supabase), el administrador presiona **Restablecer contraseña** en **Usuarios**: la cuenta recibe una contraseña temporal que el administrador le entrega, y al entrar la app le pide crear la suya. Lo hace la función [`sl-restablecer-contrasena`](supabase/functions/sl-restablecer-contrasena/index.ts), que solo responde a un administrador y solo toca cuentas ligadas a un gafete de Surtido. La cuenta es la misma de Control de Personal, así que la contraseña nueva aplica en las dos apps.
 
 [`supabase/functions/sl-aprobar-acceso`](supabase/functions/sl-aprobar-acceso/index.ts) es una Edge Function de Supabase. Solo responde a un administrador (lo comprueba con `sl_es_admin()`), crea la cuenta con la contraseña inicial (o usa la que ya existe con ese correo), la liga al gafete y marca la solicitud como aprobada. Usa la llave de servicio que Supabase da a sus funciones; esa llave nunca está en el navegador.
 
@@ -114,6 +118,19 @@ Crear, renombrar o eliminar un mapa y subir su plano se guardan al momento. En e
 
 Se guarda en `sl_config`: `layout` (`mapas`: nombre, tamaño del plano y zonas de cada uno, en fracciones del plano, así que se conservan al cambiar la imagen) y un documento por imagen (`layout_img_<mapa>`; el primer mapa usa `layout_img`). Las imágenes no se leen con el resto de la configuración: solo la del mapa abierto en la pestaña. El formato anterior, de un solo plano, se lee como el mapa *Planta*.
 
+## Avisos
+
+La campana **Avisos** del menú muestra cuántos avisos sin leer tiene cada quien; al llegar uno nuevo aparece un mensaje. Al tocar un aviso se marca como leído y lleva a la pestaña donde se atiende.
+
+| Aviso | Lo recibe |
+|---|---|
+| Cambio al plan por aprobar (alta, cambio o baja) | Administrador y quien tenga **Aprobar cambios al plan** (por defecto, Gerencia) |
+| Cambio al plan aprobado o rechazado | Quien lo solicitó |
+| Solicitud de acceso | Administrador |
+| Línea detenida / reanudada | Administrador, planeadores, supervisores, líderes de línea y Gerencia |
+
+Nadie recibe aviso de lo que hizo él mismo. Los generan disparadores de la base (migración `20261110180000_sl_avisos.sql`) en la tabla `sl_avisos`; cada usuario solo puede leer los suyos y marcarlos como leídos. Un error al generar un aviso nunca impide guardar el plan, el paro o la solicitud.
+
 ## Métricas
 
 Una pestaña con dos secciones, **Resumen** y **Reportes**, que comparten los filtros: periodo por **día** (en vivo), **semana** (lunes a domingo, últimas 26 semanas) o **rango de fechas** (hasta 62 días), **turno** y **línea**.
@@ -156,6 +173,8 @@ Este proyecto de Supabase también lo usa **Control de Personal** (repositorio `
 - **Cerrar sesión:** cada app cierra la sesión solo en el equipo actual (`signOut({scope:"local"})`) y borra del navegador solo las claves `sb-<proyecto>-`. No uses el cierre global: sacaría a la persona de la otra app en todos sus equipos.
 - **Authentication (una sola configuración para las dos):** *Allow new users to sign up* debe seguir desactivado. En *URL Configuration*, las direcciones de las dos apps deben estar en *Redirect URLs*: cada app manda el enlace de recuperación a su propia dirección y, si falta, Supabase usa la *Site URL*, que es la de una sola app. El SMTP y las reglas de contraseña aplican a las dos.
 - **Cuentas desde Surtido de Línea:** la función `sl-aprobar-acceso` crea la cuenta o, si el correo ya tiene una, la liga al gafete sin cambiar su contraseña.
+- **Restablecer contraseña desde Surtido de Línea:** `sl-restablecer-contrasena` solo cambia cuentas ligadas a un gafete de Surtido, pero como la cuenta es compartida, la contraseña temporal también aplica en Control de Personal. Las dos apps piden crear una contraseña propia al entrar (`debe_cambiar`).
+- **Avisos:** cada app tiene su tabla (`sl_avisos` y `avisos`); ninguna escribe en la de la otra.
 
 ## Configuración
 
@@ -175,6 +194,7 @@ js/
   calculo.js          Cálculo del programa de surtido (paros, reconteos, arranque)
   sesion.js           Navegación, menú y usuario en sesión
   acceso.js           Inicio de sesión, solicitar acceso, primer ingreso y cambio de contraseña
+  avisos.js           Avisos (campana): lista, leídos y aviso al llegar uno nuevo
   grafica.js          Gráfica de barras apiladas (a tiempo, tarde, no surtido)
   vistas/
     plan.js           Plan de producción (aprobación de Gerencia, editar, rolar)
@@ -189,7 +209,7 @@ js/
   utilidades.js       Guardado con manejo de errores, confirmaciones y Excel
   arranque.js         Inicia la app (va al final del orden de carga)
 supabase/migrations/  Esquema de la base de datos
-supabase/functions/   Edge Function sl-aprobar-acceso (crea la cuenta al aprobar)
+supabase/functions/   Edge Functions sl-aprobar-acceso (crea la cuenta al aprobar) y sl-restablecer-contrasena
 ```
 
 Los scripts comparten funciones y variables globales, así que el orden de los `<script>` en `index.html` importa: `arranque.js` siempre va al último.
