@@ -118,6 +118,14 @@ Crear, renombrar o eliminar un mapa y subir su plano se guardan al momento. En e
 
 Se guarda en `sl_config`: `layout` (`mapas`: nombre, tamaño del plano y zonas de cada uno, en fracciones del plano, así que se conservan al cambiar la imagen) y un documento por imagen (`layout_img_<mapa>`; el primer mapa usa `layout_img`). Las imágenes no se leen con el resto de la configuración: solo la del mapa abierto en la pestaña. El formato anterior, de un solo plano, se lee como el mapa *Planta*.
 
+### Flujo entre procesos
+
+El flujo se define en el BOM: si el BOM de un ensamble tiene como NP a otro ensamble, ese **subensamble** se produce en su línea y se consume en la estación del ensamble que lo lleva. El ensamble final (empaque) es el que no es subensamble de ningún otro. Cada ensamble indica en su BOM **Se produce en** (línea y, opcional, estación); si no se captura, se toma la línea donde está planeado.
+
+En la vista **Layout**, **Flujo** elige un ensamble final y dibuja flechas del lugar donde se produce cada subensamble al lugar donde se consume, con la tabla de pasos debajo (subensamble, dónde se produce y se consume, pza/u y empaque). Los pasos sin zona en el mapa se listan en gris.
+
+**Editar el flujo (solo administrador):** en **Editar layout → Editar: Flujo** se toca la zona que produce y luego la que consume. Se elige el ensamble que consume, se marcan los subensambles que pasan de una a otra y se captura pza/u, empaque y, opcional, UPH. Al guardar se actualizan los NP del BOM del ensamble en esa estación y el **Se produce en** de cada subensamble. Tocar la etiqueta de una flecha abre la misma conexión para editarla. Los subensambles que llegan a esa estación desde otras líneas no se tocan.
+
 ## Avisos
 
 La campana **Avisos** del menú muestra cuántos avisos sin leer tiene cada quien; al llegar uno nuevo aparece un mensaje. Al tocar un aviso se marca como leído y lleva a la pestaña donde se atiende.
@@ -193,6 +201,7 @@ js/
   almacen.js          Lectura y escritura en Supabase (tablas sl_*) con tiempo real
   estado.js           Estado de la app, parámetros, roles y permisos
   calculo.js          Cálculo del programa de surtido (paros, reconteos, arranque)
+  flujo.js            Flujo entre procesos: subensambles, dónde se producen y se consumen
   sesion.js           Navegación, menú y usuario en sesión
   acceso.js           Inicio de sesión, solicitar acceso, primer ingreso y cambio de contraseña
   avisos.js           Avisos (campana): lista, leídos y aviso al llegar uno nuevo
