@@ -261,10 +261,21 @@ function svgFlechas(flechas,img){
     ${flechas.map(g=>`<path d="${geoFlecha(g,W,H).d}" fill="none" stroke="#ffffff" stroke-width="${sw*2.2}" stroke-linecap="round"/><path d="${geoFlecha(g,W,H).d}" fill="none" stroke="#0f5f8c" stroke-width="${sw}" stroke-linecap="round" marker-end="url(#ly-punta)"/>`).join("")}</svg>`;
 }
 const textoFlecha=g=>g.con.length===1?`${g.con[0].hijo} · ${fmtN(Number(g.con[0].item.qtyPer)||1,4)} pza/u`:`${g.con.length} subensambles`;
+// Lo que pasa por una flecha en la fecha y turno elegidos: piezas asignadas, pendientes de mover y el siguiente movimiento.
+function vivoFlecha(g){
+  const asg=Object.values(flujoVivo().porProductor).filter(r=>r.p.fecha===S.sel.fecha&&(!S.sel.turno||r.p.turno===S.sel.turno))
+    .flatMap(r=>r.asign).filter(a=>g.con.some(c=>c.hijo===a.p.ensamble&&c.padre===a.d.c.ensamble&&normEst(c.item.estacion)===normEst(a.d.estacion)));
+  if(!asg.length) return null;
+  const movs=asg.flatMap(a=>a.movs).filter(x=>!S.surtidos[x.t.id]&&x.hora).sort((a,b)=>a.hora-b.hora);
+  return {total:asg.reduce((n,a)=>n+a.qty,0),pend:asg.reduce((n,a)=>n+a.movs.filter(x=>!S.surtidos[x.t.id]).reduce((k,x)=>k+x.qty,0),0),sig:movs[0]||null};
+}
 function etiquetasFlechas(flechas,img,editable){
-  return flechas.map((g,i)=>{ const p=geoFlecha(g,img.w,img.h);
-    return `<${editable?"button":"span"} class="ly-flecha" ${editable?`data-flecha="${i}"`:""} style="left:${p.lx*100}%;top:${p.ly*100}%"
-      title="${esc(g.con.map(c=>`${c.hijo} → ${c.padre} (est. ${c.item.estacion}, ${c.item.qtyPer} pza/u)`).join("\n"))}">${esc(textoFlecha(g))}</${editable?"button":"span"}>`; }).join("");
+  return flechas.map((g,i)=>{ const p=geoFlecha(g,img.w,img.h), v=editable?null:vivoFlecha(g);
+    const txt=textoFlecha(g)+(v?(v.pend?` · mover ${fmtN(v.pend)} pzs`:" · movido"):"");
+    const tit=g.con.map(c=>`${c.hijo} → ${c.padre} (est. ${c.item.estacion}, ${c.item.qtyPer} pza/u)`).join("\n")
+      +(v?`\n${fmtN(v.total)} pzs a la siguiente estación${v.sig?` · siguiente: ${fmtN(v.sig.qty)} pzs a las ${fmtT(v.sig.hora)}`:""}`:"");
+    return `<${editable?"button":"span"} class="ly-flecha${v?.pend?" vivo":""}" ${editable?`data-flecha="${i}"`:""} style="left:${p.lx*100}%;top:${p.ly*100}%"
+      title="${esc(tit)}">${esc(txt)}${v?.sig?`<small> ${fmtT(v.sig.hora)}</small>`:""}</${editable?"button":"span"}>`; }).join("");
 }
 // Pasos del flujo de un ensamble final, debajo del plano.
 function pasosFlujo(fin,fl){

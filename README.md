@@ -126,6 +126,12 @@ En la vista **Layout**, **Flujo** elige un ensamble final y dibuja flechas del l
 
 **Editar el flujo (solo administrador):** en **Editar layout → Editar: Flujo** se toca la zona que produce y luego la que consume. Se elige el ensamble que consume, se marcan los subensambles que pasan de una a otra y se captura pza/u, empaque y, opcional, UPH. Al guardar se actualizan los NP del BOM del ensamble en esa estación y el **Se produce en** de cada subensamble. Tocar la etiqueta de una flecha abre la misma conexión para editarla. Los subensambles que llegan a esa estación desde otras líneas no se tocan.
 
+**Flujo en vivo.** Lo que se planea producir de un subensamble se asigna a los planes que lo consumen, desde el turno en que se produce hasta el **fin del turno siguiente**, en el orden en que cada estación lo necesita (según el UPH y el punto de reorden de la estación que consume). Así se mueve directo a la siguiente estación, sin devolverlo al almacén para volver a pedirlo:
+
+- **Surtido**: aviso «Deberás mover X pzs de producto terminado a la siguiente estación» y el panel **Producto terminado**, con cada destino, el siguiente movimiento (piezas y hora; *espera producción* si la línea aún no las tiene listas) y **Confirmar movimiento**, que registra el surtido de esa estación con el gafete de quien recibe. En la estación que consume, cada NP indica de qué línea viene y cuánto llega del almacén.
+- **Plan de producción**: cada plan que produce un subensamble indica a qué línea pasa o, si no hay consumo en ese horizonte, «Sin consumo en las siguientes estaciones: N pzs → almacén» (o «Excedente N pzs → almacén» si sobra una parte).
+- **Layout**: las flechas del flujo muestran las piezas por mover en la fecha y turno elegidos y la hora del siguiente movimiento.
+
 ## Avisos
 
 La campana **Avisos** del menú muestra cuántos avisos sin leer tiene cada quien; al llegar uno nuevo aparece un mensaje. Al tocar un aviso se marca como leído y lleva a la pestaña donde se atiende.

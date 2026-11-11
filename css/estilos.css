@@ -307,3 +307,9 @@ button.ly-flecha:hover{background:#0f5f8c;color:#fff}
 .ly-plano.conectando .ly-zona{cursor:pointer}
 .ly-conexion{width:min(720px,100%)}
 .ly-conexion thead th{position:sticky;top:0;z-index:1}
+.flujo-prod{padding:12px 16px;border-top:1px solid var(--line)}
+.flujo-prod:first-of-type{border-top:0}
+.flujo-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.flujo-dest{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center;margin:8px 0 0 12px;padding-left:10px;border-left:3px solid var(--accent)}
+.flujo-de{color:var(--ink-2)}
+.ly-flecha.vivo{background:#0f5f8c;color:#fff}
