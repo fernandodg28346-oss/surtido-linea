@@ -86,7 +86,7 @@ function viewPlan(app){
   <div class="panel"><div class="tbl-wrap"><table>
     <thead><tr><th>Fecha</th><th>Turno</th><th>Línea</th><th>Ensamble</th><th>WO</th><th class="num">Cantidad</th><th class="num">UPH</th><th class="num">Horas</th><th>BOM</th><th>Arranque</th>${ed?"<th></th>":""}</tr></thead>
     <tbody>${rows.length?rows.map(p=>{const u=planUph(p),hasB=!!S.bom[safeId(p.ensamble)];return`<tr${p.pendiente?.tipo==="alta"?' style="opacity:.6"':""}>
-      <td class="mono" style="white-space:nowrap">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}${p.pendiente?`<div><span class="pill p-warn" title="Pendiente de aprobación de Gerencia">${PEND_LABEL[p.pendiente.tipo]} pendiente</span></div>`:""}${p.original?`<div class="small muted" style="font-family:var(--f-body);white-space:nowrap">Rolado desde ${esc(p.original.fecha)} ${esc(p.original.turno)}</div>`:""}</td>
+      <td class="mono" style="white-space:nowrap">${esc(p.fecha)}</td><td>${esc(p.turno)}</td><td><b>${esc(p.linea)}</b></td><td class="mono">${esc(p.ensamble)}${p.pendiente?`<div><span class="pill p-warn" title="Pendiente de aprobación de Gerencia">${PEND_LABEL[p.pendiente.tipo]} pendiente</span></div>`:""}${p.original?`<div class="small muted" style="font-family:var(--f-body);white-space:nowrap">Rolado desde ${esc(p.original.fecha)} ${esc(p.original.turno)}</div>`:""}${p.pendiente?.tipo==="alta"?"":flujoPlanTag(p)}</td>
       <td class="mono">${p.wo?esc(p.wo):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${fmtN(p.cantidad)}</td><td class="num">${u?fmtN(u):'<span class="pill p-bad">Falta</span>'}</td><td class="num">${u?fmtN(p.cantidad/u,1):"—"}</td>
       <td>${hasB?'<span class="pill p-ok">Cargado</span>':'<span class="pill p-bad">Falta BOM</span>'}</td>
       <td>${startLabel(p)}</td>
@@ -196,4 +196,20 @@ function openPlanEdit(p){
       :Object.assign({},p,cambios,{historial:[...(p.historial||[]),histEntry("cambio",{cambios})]});
     if(await safeWrite(()=>Store.set("plan",p._id,next))){ close(); toast(req?"Cambio enviado a aprobación de Gerencia.":"Plan actualizado."); }
   };
+}
+
+// Flujo del plan: lo que produce sin consumo en sus siguientes estaciones (va al almacén) y de dónde recibe subensambles.
+function flujoPlanTag(p){
+  const {prod,cons}=flujoDePlan(p), out=[], st='style="font-family:var(--f-body);white-space:normal"';
+  if(prod){
+    const dest=[...new Set(prod.asign.map(a=>a.d.c.linea))];
+    if(!prod.asignado) out.push(`<span class="pill p-warn" ${st} title="Sin plan que lo consuma hasta ${esc(fmtFechaHora(prod.horizonte))} (fin del turno siguiente)">Sin consumo en las siguientes estaciones: ${fmtN(prod.excedente)} pzs → almacén</span>`);
+    else{
+      out.push(`<span class="pill p-acc" ${st}>Pasa a ${dest.map(esc).join(", ")}: ${fmtN(prod.asignado)} pzs</span>`);
+      if(prod.excedente) out.push(`<span class="pill p-warn" ${st} title="Sin consumo planeado hasta ${esc(fmtFechaHora(prod.horizonte))}">Excedente ${fmtN(prod.excedente)} pzs → almacén</span>`);
+    }
+  }
+  const de=[...new Set(cons.flatMap(d=>d.de.map(a=>a.p.linea)))];
+  if(de.length) out.push(`<span class="small muted" ${st}>Recibe subensambles de ${de.map(esc).join(", ")}</span>`);
+  return out.length?`<div class="row" style="gap:4px;margin-top:4px">${out.join("")}</div>`:"";
 }

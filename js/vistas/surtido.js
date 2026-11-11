@@ -20,6 +20,9 @@ function viewSurtido(app){
   const atOf=r=>r.nxt&&r.nxt.t.at?r.nxt.t.at.getTime():Infinity;
   stList.forEach(s=>s.rows.sort((a,b)=>atOf(a)-atOf(b)));
   const ctlLines=[...new Set(shown.map(p=>p.linea))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const fv=flujoVivo(), prods=shown.map(p=>fv.porProductor[p._id]).filter(Boolean);
+  const porMover=prods.reduce((n,r)=>n+r.asign.reduce((m,a)=>m+a.movs.filter(x=>!S.surtidos[x.t.id]).reduce((k,x)=>k+x.qty,0),0),0);
+  const alAlmacen=prods.reduce((n,r)=>n+r.excedente,0);
   app.innerHTML=`
   <div class="view-head"><div><h2>Surtido de línea</h2><p>NP a surtir por estación según el plan. Punto de reorden al ${c.pct}% de la capacidad de la estación; cada surtido repone el ${100-c.pct}%. ${can.confirm()?"Confirma cada surtido con tu gafete y el de quien recibe.":""}</p></div></div>
   <div class="filters">
@@ -35,6 +38,9 @@ function viewSurtido(app){
     <div><div class="lbl">Siguiente surtido</div><div class="v">${next?fmtT(next):"—"}</div></div>
   </div>
   ${errors.length?`<div class="note" style="margin-bottom:16px;border-color:var(--bad);color:var(--bad)">${[...new Set(errors)].map(esc).join(" · ")}. Corrígelo en BOM o Plan.</div>`:""}
+  ${prods.length?`<div class="note flujo-aviso" style="margin-bottom:16px">${porMover?`Deberás mover <b>${fmtN(porMover)} pzs</b> de producto terminado a la siguiente estación.`:"Sin movimientos pendientes de producto terminado."}${alAlmacen?` <b>${fmtN(alAlmacen)} pzs</b> no tienen consumo en las siguientes estaciones: envíalas al almacén.`:""}</div>`:""}
+  ${prods.length?`<div class="panel" style="margin-bottom:16px"><div class="ph"><h3>Producto terminado</h3><span class="muted small">Se mueve directo a la estación que lo consume, al llegar a su punto de reorden</span></div>
+    ${prods.map(r=>flujoProd(r,now)).join("")}</div>`:""}
   ${ctlLines.length?`<div class="panel" style="margin-bottom:16px"><div class="ph"><h3>Control de línea</h3><span class="muted small">Paros y arranques recorren el programa de surtido</span></div>
     ${ctlLines.map(l=>lineCtl(l,shown.filter(p=>p.linea===l),now)).join("")}</div>`:""}
   ${stList.length?`<div class="stations">${stList.map(st=>`
@@ -48,6 +54,10 @@ function viewSurtido(app){
     const [pid,idx,est,np]=JSON.parse(b.dataset.confirm); const p=S.plan[pid];
     const it=computeItems(p).items.find(x=>x.estacion===est&&x.np===np); openConfirm(p,it,it.trips.find(t=>t.k===idx));
   });
+  app.querySelectorAll("[data-mover]").forEach(b=>b.onclick=()=>{
+    const [pid,est,np,k]=JSON.parse(b.dataset.mover); const p=S.plan[pid];
+    const it=computeItems(p).items.find(x=>x.estacion===est&&x.np===np); openConfirm(p,it,it?.trips.find(t=>t.k===k));
+  });
   app.querySelectorAll("[data-recount]").forEach(b=>b.onclick=()=>{
     const [pid,est,np]=JSON.parse(b.dataset.recount); const p=S.plan[pid];
     openRecount(p,computeItems(p).items.find(x=>x.estacion===est&&x.np===np));
@@ -55,6 +65,27 @@ function viewSurtido(app){
   bindLineOps(app);
   // Desde el layout: lleva a la estación tocada en el plano.
   if(S.sel.focoSt){ const el=document.getElementById("st-"+safeId(S.sel.focoSt)); S.sel.focoSt=""; if(el){ el.scrollIntoView({block:"start"}); el.classList.add("foco"); } }
+}
+// Producto terminado de un plan: a qué estaciones se mueve, cuánto y cuándo, y cuánto va al almacén.
+function flujoProd(r,now){
+  const p=r.p, hz=fmtFechaHora(r.horizonte);
+  const pend=x=>!S.surtidos[x.t.id];
+  return `<div class="flujo-prod">
+    <div class="flujo-cab"><span class="st-id">${esc(p.linea)}</span><b class="mono">${esc(r.sub)}</b><span class="muted">· ${esc(p.turno)} · ${fmtN(r.total)} pzs</span>
+      ${r.asignado?`<span class="pill p-acc">A la siguiente estación ${fmtN(r.asignado)}</span>`:""}
+      ${r.excedente?`<span class="pill p-warn" title="Sin consumo planeado hasta ${esc(hz)} (fin del turno siguiente)">${r.asignado?"Excedente":"Sin consumo"} ${fmtN(r.excedente)} → almacén</span>`:""}</div>
+    ${!r.asignado?`<p class="small muted" style="margin:4px 0 0">No hay plan que lo consuma en sus siguientes estaciones hasta el fin del turno siguiente (${esc(hz)}). Envía lo producido al almacén.</p>`:""}
+    ${r.asign.map(a=>{ const d=a.d, c=d.c, sig=a.movs.find(pend), hechas=a.movs.filter(x=>!pend(x)).reduce((n,x)=>n+x.qty,0);
+      const espera=sig&&sig.lista&&sig.t.at&&sig.lista>sig.t.at, st=sig?tripStatus(sig.t,now):null;
+      return `<div class="flujo-dest">
+        <div style="min-width:0">→ <b>${esc(c.linea)}</b> · Est. ${esc(d.estacion)} · <span class="mono">${esc(c.ensamble)}</span> <span class="muted small">${esc(c.fecha)} ${esc(c.turno)}</span>
+          <div class="small muted">${fmtN(a.qty)} pzs para su plan${hechas?` · movidas ${fmtN(hechas)}`:""}${d.resta?` · el resto (${fmtN(d.resta)}) llega del almacén`:""}</div></div>
+        <div class="np-act">${sig?`<span class="pill ${st.key==="due"?"p-bad":st.key==="stop"?"p-warn":"p-idle"}">Mover ${fmtN(sig.qty)} pzs</span><span class="mono small">${sig.hora?fmtT(sig.hora):sig.t.at?fmtT(sig.t.at):"En pausa"}</span>
+          ${espera?`<span class="small" style="color:var(--warn)" title="La estación las necesita a las ${fmtT(sig.t.at)}; la línea las tiene listas a las ${fmtT(sig.lista)}">espera producción</span>`:!sig.lista?`<span class="small muted">${r.inicio?"":"espera arranque"}</span>`:""}
+          ${can.confirm()&&sig.t.at?`<button class="btn pri" data-mover='${esc(JSON.stringify([c._id,d.estacion,d.np,sig.t.k]))}'>Confirmar movimiento</button>`:""}`
+          :'<span class="pill p-ok">Movido</span>'}</div>
+      </div>`; }).join("")}
+  </div>`;
 }
 // Fila de control por línea: paro/reanudación y arranque de cada ensamble del plan.
 function lineCtl(linea,plans,now){
@@ -165,9 +196,16 @@ function npRow({p,it,statuses,nxt},now){
     <div class="np-act">${allDone?'<span class="pill p-ok">Completo</span>':`${pillOf(nxt.s.key)}<span class="mono small">${nxt.t.at?fmtT(nxt.t.at):"En pausa"} · ${fmtN(nxt.t.qty)} pzs</span>
       ${can.confirm()&&nxt.t.at?`<button class="btn ${nxt.s.key==="due"?"ok":"pri"}" data-confirm='${esc(JSON.stringify([p._id,nxt.t.k,it.estacion,it.np]))}'>Confirmar surtido</button>`:""}`}
       ${can.ops()?`<button class="btn ghost" data-recount='${esc(JSON.stringify([p._id,it.estacion,it.np]))}'>Recontar material</button>`:""}</div>
+    ${flujoTag(p,it)}
     ${rc?`<div class="recount-line">Reconteo ${fmtT(new Date(rc.ts))}: ${fmtN(rc.cantidad)} pzs (esperado ≈ ${fmtN(rc.esperado)}) · ${esc(rc.motivo)} · ${esc(rc.porNombre)}</div>`:""}
     <div class="trips" aria-label="Surtidos del turno">${statuses.map(x=>`<span class="trip ${cls[x.s.key]} ${nxt&&x===nxt?"next":""}" title="${x.s.done?"Surtió "+esc(x.s.done.surtioNombre)+" · recibió "+esc(x.s.done.recibioNombre)+" · "+fmtT(new Date(x.s.done.ts)):x.t.at?"Programado "+fmtT(x.t.at):"En pausa: línea detenida"}">${x.s.done&&!x.t.at?fmtT(new Date(x.s.done.ts)):x.t.at?fmtT(x.t.at):"pausa"}</span>`).join("")}</div>
   </div>`;
+}
+// En la estación que consume un subensamble: de qué línea viene y cuánto llega del almacén.
+function flujoTag(p,it){
+  const d=flujoVivo().porConsumo[p._id+"|"+it.estacion+"|"+it.np]; if(!d||!d.de.length) return "";
+  const de={}; d.de.forEach(a=>de[a.p.linea]=(de[a.p.linea]||0)+a.qty);
+  return `<div class="recount-line flujo-de">Viene de ${Object.entries(de).map(([l,q])=>`<b>${esc(l)}</b> (${fmtN(q)} pzs)`).join(", ")}${d.resta?` · ${fmtN(d.resta)} pzs del almacén`:""}</div>`;
 }
 const fmtInterval=m=>m>=60?(Math.floor(m/60)+" h "+String(Math.round(m%60)).padStart(2,"0")+" min"):Math.max(1,Math.round(m))+" min";
 
