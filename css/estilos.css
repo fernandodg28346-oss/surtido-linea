@@ -298,3 +298,12 @@ td.num,th.num{text-align:right}
 .seg button{font:600 13px var(--f-body);padding:7px 14px;border:0;background:transparent;color:var(--ink-2);cursor:pointer}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* Flujo sobre el plano: flechas de la estación que produce a la que consume */
+.ly-flechas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ly-flecha{position:absolute;transform:translate(-50%,-50%);font:700 11px/1.3 var(--f-body);background:#fff;color:#0f5f8c;border:1.5px solid #0f5f8c;border-radius:12px;padding:2px 8px;white-space:nowrap;box-shadow:0 1px 3px #0003;z-index:2}
+button.ly-flecha{cursor:pointer}
+button.ly-flecha:hover{background:#0f5f8c;color:#fff}
+.ly-plano.conectando .ly-zona{cursor:pointer}
+.ly-conexion{width:min(720px,100%)}
+.ly-conexion thead th{position:sticky;top:0;z-index:1}
