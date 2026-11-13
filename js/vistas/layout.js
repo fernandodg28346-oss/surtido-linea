@@ -121,7 +121,7 @@ function abrirZona(z){
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="lz-t">
     <div class="ph"><h3 id="lz-t">${esc(zonaNombre(z))}</h3><button class="btn ghost" id="lz-x">Cerrar</button></div>
     <div class="pb"><div><span class="pill p-${est.c}">${est.l}</span></div>
-      <div class="small muted">Línea <b>${esc(z.linea)}</b>${z.estacion?` · estación <b>${esc(z.estacion)}</b>`:" · toda la línea"}${e.l?` · ${[...e.l.ens].map(esc).join(", ")}`:""}</div>
+      <div class="small muted">Línea <b>${esc(z.linea)}</b>${z.estacion?` · estación <b>${esc(z.estacion)}</b>`:" · toda la línea"}${e.l?` · ${[...e.l.ens].map(esc).join(", ")}`:""}${operadoresDe(z.linea)?` · requiere <b>${txtOperadores(operadoresDe(z.linea))}</b>`:""}</div>
       ${e.l?.paro?`<div class="small" style="color:var(--warn)">Detenida desde ${fmtT(new Date(e.l.paro.inicio))}. Los surtidos siguientes están en pausa.</div>`:""}
       ${e.pend?.length?`<div class="pend"><div class="lbl">Pendiente de resurtir</div>${e.pend.slice(0,8).map(x=>`<div class="pend-row"><span class="mono"><b>${esc(x.it.estacion)}</b> · ${esc(x.it.np)}</span><span class="mono">${fmtN(x.t.qty)} pzs</span><span class="late-by">hace ${ago(x.min)}</span></div>`).join("")}${e.pend.length>8?`<div class="small muted">y ${e.pend.length-8} más</div>`:""}</div>`
         :e.k==="none"?`<p class="muted" style="margin:0">No hay plan para esta ${z.estacion?"estación":"línea"} en ${esc(S.sel.fecha)}${S.sel.turno?" turno "+esc(S.sel.turno):""}.</p>`:""}
@@ -228,6 +228,7 @@ function editarZona(z,rect){
         <div class="fld" style="flex:1"><label for="ez-l">Línea</label><select id="ez-l">${lineas.map(l=>`<option ${l===v.linea?"selected":""}>${esc(l)}</option>`).join("")}
           ${v.linea&&!lineas.includes(v.linea)?`<option selected>${esc(v.linea)}</option>`:""}<option value="${NUEVA}" ${lineas.length||v.linea?"":"selected"}>+ Nueva línea…</option></select></div>
         <div class="fld" style="flex:1" id="ez-ln-w" hidden><label for="ez-ln">Nombre de la línea nueva</label><input id="ez-ln" autocomplete="off" style="text-transform:uppercase" placeholder="Ej. ROBOT 6"></div>
+        <div class="fld" id="ez-lo-w" hidden><label for="ez-lo">Operadores por turno</label><input id="ez-lo" type="number" min="1" step="1" class="w-xs" inputmode="numeric" title="Personas de surtido que requiere la línea en cada turno para no detenerse"></div>
       </div>
       <div class="row">
         <div class="fld" style="flex:1"><label for="ez-e">Estación</label><select id="ez-e"></select></div>
@@ -251,7 +252,7 @@ function editarZona(z,rect){
       ${actual?`<option selected value="${esc(actual)}">${esc(actual)} (se agregará al catálogo)</option>`:""}<option value="${NUEVA}">+ Nueva estación…</option>`;
     mostrar();
   };
-  const mostrar=()=>{ document.getElementById("ez-ln-w").hidden=selL.value!==NUEVA; document.getElementById("ez-en-w").hidden=selE.value!==NUEVA; };
+  const mostrar=()=>{ document.getElementById("ez-ln-w").hidden=document.getElementById("ez-lo-w").hidden=selL.value!==NUEVA; document.getElementById("ez-en-w").hidden=selE.value!==NUEVA; };
   selL.onchange=()=>{ llenarEst(selE.value===NUEVA?"":selE.value); if(selL.value===NUEVA) document.getElementById("ez-ln").focus(); };
   selE.onchange=()=>{ mostrar(); if(selE.value===NUEVA) document.getElementById("ez-en").focus(); };
   llenarEst(v.estacion,true);
@@ -261,12 +262,14 @@ function editarZona(z,rect){
   document.getElementById("f-ez").onsubmit=async e=>{ e.preventDefault(); err.textContent="";
     const linea=lineaElegida(), estacion=selE.value===NUEVA?ffv("ez-en"):selE.value;
     if(!linea) return err.textContent="Escribe el nombre de la línea nueva.";
+    const ops=Math.round(Number(ffv("ez-lo")));
+    if(selL.value===NUEVA&&!(ops>=1)) return err.textContent="Indica cuántos operadores de surtido requiere la línea por turno.";
     if(selE.value===NUEVA&&!estacion) return err.textContent="Escribe el nombre de la estación nueva.";
     const mb=mapaBorrador();
     const otra=mb.zonas.find(x=>x.id!==z?.id&&normEst(x.linea)===normEst(linea)&&normEst(x.estacion)===normEst(estacion));
     if(otra) return err.textContent=`${estacion?"La estación "+estacion+" de "+linea:"La línea "+linea} ya está marcada en este mapa.`;
     const btn=e.submitter||e.target.querySelector(".btn.pri"); btn.disabled=true;
-    if(!await agregarCatalogo(linea,estacion)){ btn.disabled=false; return; }
+    if(!await agregarCatalogo(linea,estacion,"",selL.value===NUEVA?ops:null)){ btn.disabled=false; return; }
     // Usa el nombre tal como quedó en el catálogo (p. ej. «Robot 4» aunque se escriba «robot 4»).
     const lc=lineasCat().find(l=>l.toUpperCase()===linea.toUpperCase())||linea;
     const ec=estacion?(estacionesCat(lc).find(x=>x.toLowerCase()===estacion.toLowerCase())||estacion):"";
@@ -299,11 +302,14 @@ function editarCatalogo(){
       <div class="ph"><h3 id="ct-t">Líneas y estaciones</h3><button class="btn ghost" id="ct-x">Cerrar</button></div>
       <div class="pb">
         <form id="f-ct" class="row"><div class="fld" style="flex:1"><label for="ct-n">Línea nueva</label><input id="ct-n" required autocomplete="off" style="text-transform:uppercase"></div>
-          <div class="fld" style="flex:1"><label for="ct-d">Descripción <span class="muted">(opcional)</span></label><input id="ct-d" autocomplete="off"></div><button class="btn pri">Agregar línea</button></form>
+          <div class="fld" style="flex:1"><label for="ct-d">Descripción <span class="muted">(opcional)</span></label><input id="ct-d" autocomplete="off"></div>
+          <div class="fld"><label for="ct-o">Operadores por turno</label><input id="ct-o" type="number" min="1" step="1" class="w-xs" required inputmode="numeric"></div><button class="btn pri">Agregar línea</button></form>
         ${pend.length?`<div class="note" style="margin-top:12px">${pend.length} línea${pend.length>1?"s o estaciones marcadas":" o estación marcada"} en los planos no ${pend.length>1?"están":"está"} en el catálogo: ${pend.slice(0,8).map(x=>esc(x.linea+(x.estacion?" · "+x.estacion:""))).join(", ")}${pend.length>8?"…":""}.
           <button class="btn" id="ct-plano" style="margin-left:8px">Agregar${pend.length>1?"las":"la"}</button></div>`:""}
         <div class="ct-lista">${list.length?list.map(l=>`<div class="ct-linea">
-          <div class="row"><b>${esc(l.nombre)}</b><span class="muted small">${esc(l.descripcion||"")}</span><button class="btn danger" style="margin-left:auto" data-ct-dl="${esc(l.nombre)}">Quitar línea</button></div>
+          <div class="row"><b>${esc(l.nombre)}</b><span class="muted small">${esc(l.descripcion||"")}</span>
+            <label class="small ct-ops" style="margin-left:auto">Operadores por turno <input type="number" min="1" step="1" inputmode="numeric" value="${Number(l.operadores)>0?l.operadores:""}" data-ct-op="${esc(l.nombre)}" aria-label="Operadores por turno en ${esc(l.nombre)}" ${Number(l.operadores)>0?"":'class="falta" placeholder="Falta"'}></label>
+            <button class="btn danger" data-ct-dl="${esc(l.nombre)}">Quitar línea</button></div>
           <div class="ct-ests">${(l.estaciones||[]).sort((a,b)=>ordenNum(a.nombre,b.nombre)).map(e=>`<span class="ct-est">${esc(e.nombre)}<button type="button" aria-label="Quitar ${esc(e.nombre)}" data-ct-de='${esc(JSON.stringify([l.nombre,e.nombre]))}'>×</button></span>`).join("")||'<span class="muted small">Sin estaciones</span>'}
             <form class="ct-add" data-ct-ae="${esc(l.nombre)}"><input aria-label="Estación nueva en ${esc(l.nombre)}" placeholder="+ Estación" list="ct-sug" autocomplete="off"></form></div>
         </div>`).join(""):'<p class="muted">Aún no hay líneas.</p>'}</div>
@@ -319,7 +325,11 @@ function editarCatalogo(){
       if(await guardar(l2)) toast("Líneas y estaciones del plano agregadas al catálogo."); };
     document.getElementById("f-ct").onsubmit=async e=>{ e.preventDefault(); const n=ffv("ct-n").toUpperCase();
       if(list.some(l=>l.nombre.toUpperCase()===n)) return toast(`La línea ${n} ya está en el catálogo.`);
-      if(await guardar([...list,{nombre:n,descripcion:ffv("ct-d"),estaciones:[]}])) toast(`Línea ${n} agregada.`); };
+      const o=Math.round(Number(ffv("ct-o"))); if(!(o>=1)) return toast("Indica cuántos operadores requiere la línea por turno.");
+      if(await guardar([...list,{nombre:n,descripcion:ffv("ct-d"),operadores:o,estaciones:[]}])) toast(`Línea ${n} agregada.`); };
+    root.querySelectorAll("[data-ct-op]").forEach(i=>i.onchange=async()=>{ const o=Math.round(Number(i.value)), l=list.find(x=>x.nombre===i.dataset.ctOp);
+      if(!(o>=1)){ toast("Los operadores deben ser 1 o más."); return pintar(); }
+      l.operadores=o; if(await guardar(list)) toast(`${l.nombre}: ${txtOperadores(o)}.`); });
     root.querySelectorAll("[data-ct-ae]").forEach(f=>f.onsubmit=async e=>{ e.preventDefault(); const est=f.querySelector("input").value.trim(); if(!est) return;
       const l=list.find(x=>x.nombre===f.dataset.ctAe); l.estaciones=l.estaciones||[];
       if(l.estaciones.some(x=>x.nombre.toLowerCase()===est.toLowerCase())) return toast(`${l.nombre} ya tiene la estación ${est}.`);

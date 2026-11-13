@@ -94,7 +94,8 @@ function lineCtl(linea,plans,now){
   return `<div class="ctl-row">
     <div class="ctl-line"><span class="st-id">${esc(linea)}</span>
       ${paro?`<span class="pill p-warn">Detenida desde ${fmtT(new Date(paro.inicio))} · ${ago((now-paro.inicio)/60000)}</span>${paro.motivo?`<span class="small muted">${esc(paro.motivo)}</span>`:""}`:'<span class="pill p-ok">En operación</span>'}
-      ${paros.length?`<span class="small muted">${paros.length} paro${paros.length>1?"s":""} hoy · ${ago(perdido)}</span>`:""}</div>
+      ${paros.length?`<span class="small muted">${paros.length} paro${paros.length>1?"s":""} hoy · ${ago(perdido)}</span>`:""}
+      ${operadoresDe(linea)?`<span class="small muted" title="Personal de surtido que requiere la línea en cada turno">Requiere ${txtOperadores(operadoresDe(linea))}</span>`:""}</div>
     <div>${ops?stopBtn(S.sel.fecha,linea):""}</div>
     <div class="ctl-plans">${plans.map(p=>{
       const confirmed=Object.values(S.surtidos).some(r=>r.planId===p._id);

@@ -50,7 +50,7 @@ function viewLineas(app){
   </div>
   ${lines.length?`<div class="lines">${lines.map(l=>`
     <section class="panel line-card st-${l.state}">
-      <div class="lc-head"><div><div class="lc-name">${esc(l.linea)}</div><div class="small muted">${[...l.ens].map(esc).join(", ")} · ${[...l.turnos].join(", ")}</div></div>
+      <div class="lc-head"><div><div class="lc-name">${esc(l.linea)}</div><div class="small muted">${[...l.ens].map(esc).join(", ")} · ${[...l.turnos].join(", ")}</div>${operadoresDe(l.linea)?`<div class="small lc-ops" title="Personal de surtido que requiere la línea en cada turno">Requiere ${txtOperadores(operadoresDe(l.linea))}</div>`:""}</div>
         <div class="lc-pct num">${l.state==="err"||l.state==="wait"?"—":l.pct+"%"}</div></div>
       <div class="lc-body">
         ${pill[l.state]}

@@ -91,13 +91,15 @@ En **Ajustes → Permisos por rol** el administrador decide qué pestañas ve ca
 
 Las líneas y sus estaciones se dan de alta desde el layout (solo administrador), para saber exactamente dónde está cada una:
 
-- Al marcar una zona en **Líneas → Layout → Editar layout**, la línea y la estación se eligen de listas, con **+ Nueva línea…** y **+ Nueva estación…** para agregarlas al catálogo en ese momento (al escribir una estación nueva se sugieren las del BOM que aún no están en el catálogo).
+- Al marcar una zona en **Líneas → Layout → Editar layout**, la línea y la estación se eligen de listas, con **+ Nueva línea…** (pide también los **operadores por turno**) y **+ Nueva estación…** para agregarlas al catálogo en ese momento (al escribir una estación nueva se sugieren las del BOM que aún no están en el catálogo).
 - **Líneas y estaciones**, en la misma edición, agrega y quita líneas y estaciones sin marcarlas en un plano, y con un botón agrega al catálogo las zonas que ya estaban marcadas antes de existir el catálogo.
 - **Ajustes → Líneas y estaciones** muestra el catálogo, avisa las estaciones del BOM que no están en él y lo carga desde Excel (columnas Linea, Estacion y Descripcion; agrega las que falten).
 
 En el plan de producción la línea se elige del catálogo, también al editar; la carga de Excel del plan ignora las filas con una línea fuera del catálogo. En el BOM la estación de cada NP se elige de las estaciones del catálogo, y «Se produce en» ofrece las estaciones de la línea elegida; las estaciones del BOM que no están en el catálogo se marcan y la carga de Excel del BOM las avisa (se cargan igual). Mientras el catálogo no tenga líneas o estaciones, se escriben a mano. Quitar una línea o estación del catálogo no cambia el plan, el BOM ni el plano: solo deja de ofrecerse en las listas.
 
-Se guarda en `sl_config` `lineas`: `items` con `nombre`, `descripcion` y `estaciones` (`[{nombre}]`) de cada línea.
+**Operadores por turno:** cada línea indica cuántas personas de surtido requiere en cada turno para no detenerse. Se captura al crear la línea, se cambia en **Líneas y estaciones** (las que no lo tienen se marcan *Falta*) o por Excel (columna Operadores), y se muestra en Ajustes, en la tarjeta de la línea, al tocar su zona en el plano y en el control de línea de Surtido. Es la base para, más adelante, compararlo con la asistencia de Control de Personal y marcar las líneas en riesgo de paro por falta de personal.
+
+Se guarda en `sl_config` `lineas`: `items` con `nombre`, `descripcion`, `operadores` y `estaciones` (`[{nombre}]`) de cada línea.
 
 ## Work order (WO)
 
