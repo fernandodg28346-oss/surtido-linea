@@ -321,3 +321,7 @@ button.ly-flecha:hover{background:#0f5f8c;color:#fff}
 .ct-est button{border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;border-radius:50%}
 .ct-est button:hover{color:var(--bad)}
 .ct-add input{width:130px;padding:4px 8px;font-size:13px}
+.ct-ops{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.ct-ops input{width:64px;padding:4px 8px}
+.ct-ops input.falta{border-color:var(--warn)}
+.lc-ops{color:var(--ink-2);margin-top:2px}
