@@ -1,11 +1,13 @@
 /* ===================== Ajustes =====================
-   Parámetros de surtido y catálogo de líneas (sl_config: "general" y "lineas"). Solo el administrador. */
+   Parámetros de surtido y catálogo de líneas y estaciones (sl_config: "general" y "lineas"). Solo el administrador.
+   El catálogo se edita en Líneas → Layout → Editar layout; aquí se consulta y se carga desde Excel. */
 function viewAjustes(app){
   const c=cfg(), lineas=lineasCat(), q=(S.sel.qLin||"").toLowerCase();
   const enPlan=l=>Object.values(S.plan).filter(p=>p.linea===l).length;
-  const shown=(S.config.lineas?.items||[]).filter(x=>!q||(x.nombre+" "+(x.descripcion||"")).toLowerCase().includes(q)).sort((a,b)=>a.nombre.localeCompare(b.nombre,undefined,{numeric:true}));
+  const shown=(S.config.lineas?.items||[]).filter(x=>!q||(x.nombre+" "+(x.descripcion||"")+" "+(x.estaciones||[]).map(e=>e.nombre).join(" ")).toLowerCase().includes(q)).sort((a,b)=>a.nombre.localeCompare(b.nombre,undefined,{numeric:true}));
+  const fuera=estacionesBom().filter(e=>!enCatalogo(e));
   app.innerHTML=`
-  <div class="view-head"><div><h2>Ajustes</h2><p>Parámetros del cálculo de surtido y catálogo de líneas. Las líneas del catálogo son las que se eligen en el plan de producción.</p></div></div>
+  <div class="view-head"><div><h2>Ajustes</h2><p>Parámetros del cálculo de surtido y catálogo de líneas y estaciones. Las líneas del catálogo son las que se eligen en el plan de producción y sus estaciones, las del BOM.</p></div></div>
   <div class="grid2">
     <div class="stack">
       <div class="panel"><div class="ph"><h3>Parámetros de surtido</h3></div><div class="pb"><form id="f-cfg" class="stack">
@@ -18,18 +20,16 @@ function viewAjustes(app){
         <p class="small muted" style="margin:0">El punto de reorden nunca baja de 20%. Con anticipación 0, el plan se modifica sin aprobación de Gerencia.</p>
         <button class="btn pri">Guardar parámetros</button></form></div></div>
     </div>
-    <div class="panel"><div class="ph"><h3>Catálogo de líneas</h3>
-      <div class="row"><button class="btn" id="tpl-lin">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-lin" accept=".xlsx,.xls,.csv"></label></div></div>
-      <div class="pb" style="border-bottom:1px solid var(--line)"><form id="f-lin" class="row">
-        <div class="fld"><label for="l-n">Línea</label><input id="l-n" class="w-s" required autocomplete="off"></div>
-        <div class="fld" style="flex:1"><label for="l-d">Descripción <span class="muted">(opcional)</span></label><input id="l-d" autocomplete="off"></div>
-        <button class="btn pri">Agregar línea</button></form></div>
-      <div class="pb" style="padding-bottom:0"><div class="row"><input id="l-q" placeholder="Buscar línea" value="${esc(S.sel.qLin||"")}" aria-label="Buscar línea"><span class="muted small">${shown.length} de ${lineas.length}</span></div></div>
+    <div class="panel"><div class="ph"><h3>Líneas y estaciones</h3>
+      <div class="row"><button class="btn" id="tpl-lin">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-lin" accept=".xlsx,.xls,.csv"></label><button class="btn pri" id="ir-layout">Editar en el layout</button></div></div>
+      <div class="pb" style="border-bottom:1px solid var(--line)"><p class="small muted" style="margin:0">Se agregan y quitan en <b>Líneas → Layout → Editar layout</b>, al marcar cada zona del plano o con <b>Líneas y estaciones</b>. El Excel agrega las que falten (columnas Linea, Estacion y Descripcion).</p>
+        ${fuera.length?`<div class="note" style="margin-top:10px;border-color:var(--warn)"><b>${fuera.length}</b> estación${fuera.length>1?"es":""} del BOM no ${fuera.length>1?"están":"está"} en el catálogo: ${fuera.slice(0,12).map(esc).join(", ")}${fuera.length>12?"…":""}. Agréga${fuera.length>1?"las":"la"} a su línea para elegir${fuera.length>1?"las":"la"} de la lista.</div>`:""}</div>
+      <div class="pb" style="padding-bottom:0"><div class="row"><input id="l-q" placeholder="Buscar línea o estación" value="${esc(S.sel.qLin||"")}" aria-label="Buscar línea o estación"><span class="muted small">${shown.length} de ${lineas.length}</span></div></div>
       <div class="tbl-wrap"><table>
-      <thead><tr><th>Línea</th><th>Descripción</th><th class="num">Planes</th><th></th></tr></thead>
-      <tbody>${shown.length?shown.map(x=>`<tr><td><b>${esc(x.nombre)}</b></td><td>${esc(x.descripcion||"")}</td><td class="num">${enPlan(x.nombre)}</td>
-        <td><button class="btn danger" data-del-lin="${esc(x.nombre)}">Quitar</button></td></tr>`).join("")
-        :`<tr><td colspan="4" class="empty">${lineas.length?"Ninguna línea coincide con la búsqueda.":"Aún no hay líneas. Mientras el catálogo esté vacío, la línea del plan se escribe a mano."}</td></tr>`}</tbody></table></div></div>
+      <thead><tr><th>Línea</th><th>Estaciones</th><th class="num">Planes</th></tr></thead>
+      <tbody>${shown.length?shown.map(x=>`<tr><td><b>${esc(x.nombre)}</b>${x.descripcion?`<div class="small muted">${esc(x.descripcion)}</div>`:""}</td>
+        <td>${(x.estaciones||[]).length?[...x.estaciones].sort((a,b)=>ordenNum(a.nombre,b.nombre)).map(e=>`<span class="ct-est" style="padding-right:10px">${esc(e.nombre)}</span>`).join(" "):'<span class="muted small">Sin estaciones</span>'}</td><td class="num">${enPlan(x.nombre)}</td></tr>`).join("")
+        :`<tr><td colspan="3" class="empty">${lineas.length?"Ninguna línea coincide con la búsqueda.":"Aún no hay líneas. Agrégalas en Líneas → Layout → Editar layout. Mientras el catálogo esté vacío, la línea del plan se escribe a mano."}</td></tr>`}</tbody></table></div></div>
   </div>
   ${permisosPanel()}`;
   document.getElementById("f-cfg").onsubmit=async e=>{e.preventDefault();
@@ -39,24 +39,20 @@ function viewAjustes(app){
   bindPermisos(app);
   const lq=document.getElementById("l-q");
   lq.oninput=()=>{ S.sel.qLin=lq.value; const pos=lq.selectionStart; render(); const n=document.getElementById("l-q"); n.focus(); n.setSelectionRange(pos,pos); };
-  const items=()=>[...(S.config.lineas?.items||[])];
+  const items=()=>JSON.parse(JSON.stringify(S.config.lineas?.items||[]));
   const saveLineas=list=>safeWrite(()=>Store.set("config","lineas",{items:list}));
-  document.getElementById("f-lin").onsubmit=async e=>{e.preventDefault();
-    const nombre=ffv("l-n").toUpperCase(), descripcion=ffv("l-d");
-    if(lineas.some(l=>l.toUpperCase()===nombre)) return toast(`La línea ${nombre} ya está en el catálogo.`);
-    if(await saveLineas([...items(),{nombre,descripcion}])){ toast(`Línea ${nombre} agregada.`); }
-  };
-  app.querySelectorAll("[data-del-lin]").forEach(b=>b.onclick=()=>{ const l=b.dataset.delLin, n=enPlan(l);
-    confirmBox(`¿Quitar la línea ${l} del catálogo?${n?` Tiene ${n} plan${n>1?"es":""}; esos planes se conservan, pero ya no se podrá elegir para planes nuevos.`:""}`,"Quitar",
-      ()=>saveLineas(items().filter(x=>x.nombre!==l))); });
-  document.getElementById("tpl-lin").onclick=()=>downloadXlsx("plantilla_lineas.xlsx",[["Linea","Descripcion"],["L1","Ensamble final"],["L2","SMT"]]);
+  document.getElementById("ir-layout").onclick=()=>{ S.sel.vistaLineas="layout"; try{ localStorage.setItem("sl_vista_lineas","layout"); }catch(e){} LY.edit=true; LY.modo="estaciones"; LY.draft=null; S.view="lineas"; render(); window.scrollTo(0,0); };
+  document.getElementById("tpl-lin").onclick=()=>downloadXlsx("plantilla_lineas.xlsx",[["Linea","Estacion","Descripcion"],["L1","E10","Ensamble final"],["L1","E20","Ensamble final"],["L2","","SMT"]]);
   document.getElementById("xl-lin").onchange=e=>readXlsx(e.target.files[0],async rows=>{
-    const list=items(); let n=0,upd=0,bad=0;
+    const list=items(); let n=0,ne=0,upd=0,bad=0;
     rows.forEach(r=>{ const nombre=String(pick(r,["linea","línea","line","area","área"])??"").trim().toUpperCase(), descripcion=String(pick(r,["descripcion","descripción","desc"])??"").trim();
+      const est=String(pick(r,["estacion","estación","station"])??"").trim();
       if(!nombre){bad++;return;}
-      const prev=list.find(x=>x.nombre.toUpperCase()===nombre);
-      if(prev){ if(descripcion) prev.descripcion=descripcion; upd++; } else { list.push({nombre,descripcion}); n++; } });
-    if(await saveLineas(list)) toast(`Líneas: ${n} agregadas${upd?`, ${upd} actualizadas`:""}${bad?`, ${bad} filas sin línea`:""}.`);
+      let l=list.find(x=>x.nombre.toUpperCase()===nombre);
+      if(l){ if(descripcion&&descripcion!==l.descripcion){ l.descripcion=descripcion; upd++; } } else { l={nombre,descripcion,estaciones:[]}; list.push(l); n++; }
+      l.estaciones=l.estaciones||[];
+      if(est&&!l.estaciones.some(e=>e.nombre.toLowerCase()===est.toLowerCase())){ l.estaciones.push({nombre:est}); ne++; } });
+    if(await saveLineas(list)) toast(`Catálogo: ${n} líneas y ${ne} estaciones agregadas${upd?`, ${upd} descripciones actualizadas`:""}${bad?`, ${bad} filas sin línea`:""}.`);
   });
 }
 

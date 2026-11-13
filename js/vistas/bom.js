@@ -6,8 +6,11 @@ function viewBom(app){
   const cur=S.sel.bom?S.bom[S.sel.bom]:null;
   const del=S.sel.bomDel; [...del].forEach(id=>{ if(!S.bom[id]) del.delete(id); });
   const allSel=list.length>0&&del.size===list.length;
+  // Estaciones del catálogo (se dan de alta en Líneas → Layout → Editar layout). Sin catálogo, se escriben a mano.
+  const ests=estacionesCat(), conCat=ests.length>0;
+  const estsProd=cur?.produce?.linea?estacionesCat(cur.produce.linea):[];
   app.innerHTML=`
-  <div class="view-head"><div><h2>BOM · materiales por ensamble</h2><p>Cada NP con su estación, cantidad por unidad y cantidad de empaque (lo que cabe en la estación). El UPH se captura en el plan de producción; aquí es opcional y solo se usa si el plan no trae uno. «Se produce en» indica la línea de un subensamble para el flujo entre procesos (también se define en Líneas → Layout → Editar layout → Flujo).</p></div>
+  <div class="view-head"><div><h2>BOM · materiales por ensamble</h2><p>Cada NP con su estación (del catálogo de líneas y estaciones, que se da de alta en Líneas → Layout → Editar layout), cantidad por unidad y cantidad de empaque (lo que cabe en la estación). El UPH se captura en el plan de producción; aquí es opcional y solo se usa si el plan no trae uno. «Se produce en» indica la línea de un subensamble para el flujo entre procesos (también se define en Líneas → Layout → Editar layout → Flujo).</p></div>
   ${ed?`<div class="row"><button class="btn" id="tpl-bom">Plantilla Excel</button><label class="btn file-btn">Cargar Excel<input type="file" id="xl-bom" accept=".xlsx,.xls,.csv"></label></div>`:""}</div>
   <div class="grid2">
     <div class="panel"><div class="ph"><h3>Ensambles</h3><span class="muted small">${list.length}</span></div>
@@ -24,18 +27,19 @@ function viewBom(app){
     <div class="panel">${cur?`
       <div class="ph"><div><h3 class="mono">${esc(cur.ensamble)}</h3></div>
         ${ed?`<div class="row"><div class="fld"><label for="cur-pl">Se produce en</label><select id="cur-pl"><option value="">—</option>${[...new Set([...lineasLayout(),cur.produce?.linea].filter(Boolean))].map(l=>`<option ${l===cur.produce?.linea?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
-          <div class="fld"><label for="cur-pe">Estación <span class="muted">(opcional)</span></label><input id="cur-pe" class="w-xs" value="${esc(cur.produce?.estacion||"")}"></div>
+          <div class="fld"><label for="cur-pe">Estación <span class="muted">(opcional)</span></label><select id="cur-pe" ${cur.produce?.linea?"":"disabled"}><option value="">—</option>${[...new Set([...estsProd,cur.produce?.estacion].filter(Boolean))].map(e=>`<option ${e===cur.produce?.estacion?"selected":""}>${esc(e)}</option>`).join("")}</select></div>
           <div class="fld"><label for="cur-uph">UPH <span class="muted">(opcional)</span></label><input id="cur-uph" type="number" min="1" class="w-xs" placeholder="Plan" value="${cur.uph||""}"></div><button class="btn danger" id="del-ens">Eliminar ensamble</button></div>`:`<span class="muted">${cur.uph?fmtN(cur.uph)+" UPH":"UPH del plan"}</span>`}</div>
       ${ed?`<div class="pb" style="border-bottom:1px solid var(--line)"><form id="f-item" class="row">
         <div class="fld"><label for="i-np">NP</label><input id="i-np" class="w-m" required></div>
         <div class="fld"><label for="i-desc">Descripción</label><input id="i-desc" class="w-m"></div>
-        <div class="fld"><label for="i-est">Estación</label><input id="i-est" class="w-xs" required></div>
+        <div class="fld"><label for="i-est">Estación</label>${conCat?`<select id="i-est" required><option value="">Elige…</option>${ests.map(e=>`<option>${esc(e)}</option>`).join("")}</select>`
+          :`<input id="i-est" class="w-xs" required title="Da de alta las estaciones en Líneas → Layout → Editar layout para elegirlas de una lista">`}</div>
         <div class="fld"><label for="i-q">Cant./unidad</label><input id="i-q" type="number" step="any" min="0.0001" class="w-xs" value="1" required></div>
         <div class="fld"><label for="i-emp">Empaque</label><input id="i-emp" type="number" min="1" class="w-xs" required></div>
         <button class="btn pri">Agregar NP</button></form></div>`:""}
       <div class="tbl-wrap"><table><thead><tr><th>Estación</th><th>NP</th><th>Descripción</th><th class="num">Cant./unidad</th><th class="num">Empaque</th>${ed?"<th></th>":""}</tr></thead>
       <tbody>${(cur.items||[]).length?[...cur.items].map((it,i)=>({it,i})).sort((a,b)=>String(a.it.estacion).localeCompare(String(b.it.estacion),undefined,{numeric:true})).map(({it,i})=>`<tr>
-        <td><b>${esc(it.estacion)}</b></td><td class="mono">${esc(it.np)}</td><td>${esc(it.desc||"")}</td><td class="num">${fmtN(it.qtyPer,4)}</td><td class="num">${it.empaque?fmtN(it.empaque):"—"}</td>
+        <td><b>${esc(it.estacion)}</b>${conCat&&!enCatalogo(it.estacion)?`<div><span class="pill p-warn" title="Agrégala a su línea en Líneas → Layout → Editar layout">No está en el catálogo</span></div>`:""}</td><td class="mono">${esc(it.np)}</td><td>${esc(it.desc||"")}</td><td class="num">${fmtN(it.qtyPer,4)}</td><td class="num">${it.empaque?fmtN(it.empaque):"—"}</td>
         ${ed?`<td><button class="btn danger" data-del-item="${i}">Quitar</button></td>`:""}</tr>`).join(""):`<tr><td colspan="6" class="empty">Este ensamble no tiene NP. Agrégalos arriba.</td></tr>`}</tbody></table></div>
     `:`<div class="empty">Selecciona o crea un ensamble.</div>`}</div>
   </div>`;
@@ -65,8 +69,8 @@ function viewBom(app){
   const saveCur=items=>safeWrite(()=>Store.set("bom",cur._id,Object.assign({},cur,items?{items}:{})));
   document.getElementById("cur-uph").onchange=e=>{cur.uph=Number(e.target.value)||null; saveCur(); toast("UPH actualizado");};
   // Dónde se produce: lo usa el flujo entre procesos (subensambles que pasan a la estación de otro ensamble).
-  const setProduce=()=>{ const linea=ffv("cur-pl"), estacion=ffv("cur-pe"); cur.produce=linea?{linea,estacion}:null; saveCur(); toast("Línea que lo produce actualizada"); };
-  document.getElementById("cur-pl").onchange=setProduce; document.getElementById("cur-pe").onchange=setProduce;
+  const setProduce=cambioLinea=>{ const linea=ffv("cur-pl"), estacion=cambioLinea?"":ffv("cur-pe"); cur.produce=linea?{linea,estacion}:null; saveCur(); toast("Línea que lo produce actualizada"); };
+  document.getElementById("cur-pl").onchange=()=>setProduce(true); document.getElementById("cur-pe").onchange=()=>setProduce(false);
   document.getElementById("del-ens").onclick=()=>confirmBox(`¿Eliminar el ensamble ${cur.ensamble} y su BOM?`,"Eliminar",()=>safeWrite(()=>Store.del("bom",cur._id)));
   document.getElementById("f-item").onsubmit=e=>{e.preventDefault();
     saveCur([...(cur.items||[]),{np:ffv("i-np"),desc:ffv("i-desc"),estacion:ffv("i-est"),qtyPer:Number(ffv("i-q")),empaque:Number(ffv("i-emp"))}]); };
@@ -84,7 +88,10 @@ function bindBomImport(){
       const u=Number(g(["uph"])); if(u) grp.uph=u;
       grp.items.push({np,desc:String(g(["descripcion","descripción","desc","descripcionnp"])||""),estacion:est,qtyPer:Number(g(["cantidadporunidad","cant/unidad","qtyper","cantidad","qty"]))||1,empaque:Number(g(["empaque","cantidadempaque","pack","capacidad"]))||null});
     });
+    // Estaciones del Excel que no están en el catálogo: se cargan igual, pero se avisan para darlas de alta.
+    const fuera=estacionesCat().length?[...new Set(Object.values(groups).flatMap(g=>g.items.map(it=>it.estacion)).filter(e=>!enCatalogo(e)))]:[];
     let n=0; for(const ens of Object.keys(groups)){ const k=safeId(ens), prev=S.bom[k]; const gr=groups[ens]; if(!gr.uph&&prev) gr.uph=prev.uph||null; if(prev?.produce) gr.produce=prev.produce; await Store.set("bom",k,gr); n++; }
     toast(`BOM: ${n} ensambles cargados (reemplazan su lista de NP)${bad?`, ${bad} filas ignoradas`:""}.`);
+    if(fuera.length) setTimeout(()=>toast(`${fuera.length} estación${fuera.length>1?"es no están":" no está"} en el catálogo: ${fuera.slice(0,6).join(", ")}${fuera.length>6?"…":""}. Agrégala${fuera.length>1?"s":""} en Líneas → Layout.`),400);
   });
 }

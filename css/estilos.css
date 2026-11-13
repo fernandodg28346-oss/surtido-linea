@@ -313,3 +313,11 @@ button.ly-flecha:hover{background:#0f5f8c;color:#fff}
 .flujo-dest{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center;margin:8px 0 0 12px;padding-left:10px;border-left:3px solid var(--accent)}
 .flujo-de{color:var(--ink-2)}
 .ly-flecha.vivo{background:#0f5f8c;color:#fff}
+.ly-catalogo{width:min(720px,100%)}
+.ct-lista{display:flex;flex-direction:column;gap:10px;max-height:55vh;overflow-y:auto;margin:12px 0}
+.ct-linea{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.ct-ests{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.ct-est{display:inline-flex;align-items:center;gap:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:2px 4px 2px 10px;font-size:13px}
+.ct-est button{border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;border-radius:50%}
+.ct-est button:hover{color:var(--bad)}
+.ct-add input{width:130px;padding:4px 8px;font-size:13px}
