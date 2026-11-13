@@ -69,5 +69,27 @@ const fmtT=d=>String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).pa
 const fmtN=(n,dp=0)=>Number(n).toLocaleString("es-MX",{maximumFractionDigits:dp,minimumFractionDigits:0});
 // Catálogo de líneas (Ajustes); vacío = la línea del plan se escribe a mano.
 function lineasCat(){ return (S.config.lineas?.items||[]).map(x=>x.nombre).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})); }
+// Estaciones del catálogo (sl_config "lineas": items [{nombre, descripcion, estaciones:[{nombre}]}]) de una línea o de
+// todas, sin repetir. Se dan de alta desde Líneas → Layout → Editar layout, al marcar cada zona.
+const ordenNum=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
+function estacionesCat(linea){
+  const its=S.config.lineas?.items||[], src=linea!=null?its.filter(x=>x.nombre===linea):its, vistos=new Map();
+  src.forEach(x=>(x.estaciones||[]).forEach(e=>{ const k=String(e.nombre).trim().toLowerCase(); if(k&&!vistos.has(k)) vistos.set(k,e.nombre); }));
+  return [...vistos.values()].sort(ordenNum);
+}
+const enCatalogo=est=>{ const k=String(est??"").trim().toLowerCase(); return estacionesCat().some(e=>e.toLowerCase()===k); };
+// Agrega al catálogo la línea y, si se indica, la estación, cuando no existen. Solo el administrador puede guardar.
+async function agregarCatalogo(linea,estacion,descripcion){
+  linea=String(linea||"").trim().toUpperCase(); estacion=String(estacion||"").trim(); if(!linea) return true;
+  const items=JSON.parse(JSON.stringify(S.config.lineas?.items||[]));
+  let l=items.find(x=>x.nombre.toUpperCase()===linea), cambio=false;
+  if(!l){ l={nombre:linea,descripcion:descripcion||"",estaciones:[]}; items.push(l); cambio=true; }
+  l.estaciones=l.estaciones||[];
+  if(estacion&&!l.estaciones.some(e=>e.nombre.toLowerCase()===estacion.toLowerCase())){ l.estaciones.push({nombre:estacion}); cambio=true; }
+  if(!cambio) return true;
+  const ok=await safeWrite(()=>Store.set("config","lineas",{items}));
+  if(ok) S.config.lineas={items};
+  return ok;
+}
 function userByBadge(b){ b=String(b||"").trim(); return Object.values(S.gafetes).find(u=>String(u.gafete)===b)||null; }
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3200); }

@@ -8,11 +8,11 @@ async function safeWrite(fn){
       "No se pudo guardar ("+(e.message||code)+").");
     return false; }
 }
-function confirmBox(msg,label,fn){
+function confirmBox(msg,label,fn,alCancelar){
   const root=document.getElementById("modal-root");
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true"><div class="pb"><p style="margin:0">${esc(msg)}</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" id="cb-n">Cancelar</button><button class="btn pri" id="cb-y">${esc(label)}</button></div></div></div></div>`;
-  document.getElementById("cb-n").onclick=()=>root.innerHTML="";
+  document.getElementById("cb-n").onclick=()=>{root.innerHTML=""; if(alCancelar) alCancelar();};
   document.getElementById("cb-y").onclick=()=>{root.innerHTML=""; fn();};
 }
 const norm=s=>String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[\s_]/g,"");

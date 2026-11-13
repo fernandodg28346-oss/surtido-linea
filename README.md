@@ -87,9 +87,17 @@ En **Ajustes → Permisos por rol** el administrador decide qué pestañas ve ca
 - Un rol sin pestañas no puede entrar (la app avisa antes de guardar).
 - **Valores por defecto** regresa a los permisos de la tabla de roles de arriba.
 
-## Catálogo de líneas
+## Catálogo de líneas y estaciones
 
-En **Ajustes → Catálogo de líneas** el administrador da de alta las líneas (a mano o desde Excel, con descripción opcional). En el plan de producción la línea se elige de esa lista, también al editar; la carga de Excel del plan ignora las filas con una línea fuera del catálogo. Mientras el catálogo esté vacío, la línea se escribe a mano. Quitar una línea del catálogo no cambia los planes que ya la usan.
+Las líneas y sus estaciones se dan de alta desde el layout (solo administrador), para saber exactamente dónde está cada una:
+
+- Al marcar una zona en **Líneas → Layout → Editar layout**, la línea y la estación se eligen de listas, con **+ Nueva línea…** y **+ Nueva estación…** para agregarlas al catálogo en ese momento (al escribir una estación nueva se sugieren las del BOM que aún no están en el catálogo).
+- **Líneas y estaciones**, en la misma edición, agrega y quita líneas y estaciones sin marcarlas en un plano, y con un botón agrega al catálogo las zonas que ya estaban marcadas antes de existir el catálogo.
+- **Ajustes → Líneas y estaciones** muestra el catálogo, avisa las estaciones del BOM que no están en él y lo carga desde Excel (columnas Linea, Estacion y Descripcion; agrega las que falten).
+
+En el plan de producción la línea se elige del catálogo, también al editar; la carga de Excel del plan ignora las filas con una línea fuera del catálogo. En el BOM la estación de cada NP se elige de las estaciones del catálogo, y «Se produce en» ofrece las estaciones de la línea elegida; las estaciones del BOM que no están en el catálogo se marcan y la carga de Excel del BOM las avisa (se cargan igual). Mientras el catálogo no tenga líneas o estaciones, se escriben a mano. Quitar una línea o estación del catálogo no cambia el plan, el BOM ni el plano: solo deja de ofrecerse en las listas.
+
+Se guarda en `sl_config` `lineas`: `items` con `nombre`, `descripcion` y `estaciones` (`[{nombre}]`) de cada línea.
 
 ## Work order (WO)
 
@@ -112,7 +120,8 @@ Al tocar una estación se ven los NP pendientes y **Ir a surtir** abre la pesta�
 
 - **Nuevo mapa**, **Renombrar** y **Eliminar mapa** administran los mapas (el nombre suele ser el site o el área, p. ej. *GDL Norte · B2*). Eliminar un mapa borra su plano y sus estaciones.
 - **Subir plano** / **Cambiar plano**: imagen JPG o PNG del mapa elegido; se reduce a 2400 px por lado.
-- Se arrastra sobre el plano para marcar cada estación y se elige su línea y estación (vacía = toda la línea), con un nombre opcional. Las zonas se mueven arrastrándolas y cambian de tamaño desde la esquina; al tocar una se edita o se quita. **Guardar estaciones** aplica los cambios para todos. La estación debe escribirse igual que en el BOM.
+- Se arrastra sobre el plano para marcar cada estación y se elige su línea y estación del catálogo (o se crean ahí mismo; *Toda la línea* = sin estación), con un nombre opcional. Una misma línea y estación no se puede marcar dos veces en un mapa. Las zonas se mueven arrastrándolas y cambian de tamaño desde la esquina; al tocar una se edita o se quita. **Guardar estaciones** aplica los cambios para todos.
+- **Líneas y estaciones** abre el catálogo (ver *Catálogo de líneas y estaciones*).
 
 Crear, renombrar o eliminar un mapa y subir su plano se guardan al momento. En el selector de mapa, cada uno indica cuántas estaciones tiene vencidas. Cada equipo recuerda el último mapa que eligió.
 

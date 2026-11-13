@@ -66,6 +66,7 @@ function viewLayout(app){
   ${editando?`<div class="filters ly-mapas">${selector}
     <div class="fld"><label>Editar</label><div class="seg" role="group" aria-label="Qué editar">${[["estaciones","Estaciones"],["flujo","Flujo"]].map(([k,l])=>`<button type="button" data-modo="${k}" aria-pressed="${LY.modo===k}">${l}</button>`).join("")}</div></div>
     ${flujo?selFlujo:""}
+    <button class="btn" id="ly-cat">Líneas y estaciones</button>
     <button class="btn" id="ly-new">Nuevo mapa</button>
     ${m?`<button class="btn" id="ly-ren">Renombrar</button><label class="btn file-btn">${img?"Cambiar plano":"Subir plano"}<input type="file" id="ly-file" accept="image/*"></label><button class="btn danger" id="ly-delmap">Eliminar mapa</button>`:""}
     ${m?`<span class="muted small" style="margin-left:auto">${(m.zonas||[]).length} estaciones marcadas</span>`:""}</div>`
@@ -99,6 +100,7 @@ function viewLayout(app){
     if(LY.draft) confirmBox("¿Descartar los cambios a las estaciones?","Descartar",salir); else salir(); });
   on("ly-save","onclick",()=>guardarLayout(true));
   on("ly-new","onclick",()=>nombreMapa(null));
+  on("ly-cat","onclick",editarCatalogo);
   on("ly-ren","onclick",()=>nombreMapa(m));
   on("ly-delmap","onclick",()=>eliminarMapa(m));
   on("ly-file","onchange",e=>subirPlano(m,e.target.files[0]));
@@ -211,32 +213,124 @@ function bindEdicionLayout(plano){
     render();
   };
 }
-// Alta o cambio de una zona: línea (del catálogo o del plan), estación del BOM (o toda la línea) y nombre opcional.
+// Alta o cambio de una zona: línea y estación del catálogo (o nuevas, que se agregan al catálogo al aplicar) y nombre
+// opcional. Sin estación, la zona es la línea completa.
 function editarZona(z,rect){
-  const root=document.getElementById("modal-root"), nueva=!z, lineas=lineasLayout(), ests=estacionesBom();
+  const root=document.getElementById("modal-root"), nueva=!z, lineas=lineasLayout();
   const v=z||{linea:S.sel.linea||lineas[0]||"",estacion:"",etiqueta:""};
+  const NUEVA="__nueva__";
+  // Estaciones del BOM que aún no están en el catálogo: se sugieren al escribir una nueva.
+  const sugeridas=estacionesBom().filter(e=>!enCatalogo(e));
   root.innerHTML=`<div class="scrim"><div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="ez-t">
     <div class="ph"><h3 id="ez-t">${nueva?"Nueva estación en el plano":"Estación en el plano"}</h3><button class="btn ghost" id="ez-x">Cancelar</button></div>
     <form class="pb" id="f-ez">
-      <div class="fld"><label for="ez-l">Línea</label>${lineas.length?`<select id="ez-l" required>${lineas.map(l=>`<option ${l===v.linea?"selected":""}>${esc(l)}</option>`).join("")}</select>`
-        :`<input id="ez-l" required autocomplete="off" value="${esc(v.linea)}">`}</div>
-      <div class="fld"><label for="ez-e">Estación</label><input id="ez-e" list="ez-ests" autocomplete="off" value="${esc(v.estacion)}" placeholder="Vacío = toda la línea">
-        <datalist id="ez-ests">${ests.map(s=>`<option value="${esc(s)}">`).join("")}</datalist></div>
+      <div class="row">
+        <div class="fld" style="flex:1"><label for="ez-l">Línea</label><select id="ez-l">${lineas.map(l=>`<option ${l===v.linea?"selected":""}>${esc(l)}</option>`).join("")}
+          ${v.linea&&!lineas.includes(v.linea)?`<option selected>${esc(v.linea)}</option>`:""}<option value="${NUEVA}" ${lineas.length||v.linea?"":"selected"}>+ Nueva línea…</option></select></div>
+        <div class="fld" style="flex:1" id="ez-ln-w" hidden><label for="ez-ln">Nombre de la línea nueva</label><input id="ez-ln" autocomplete="off" style="text-transform:uppercase" placeholder="Ej. ROBOT 6"></div>
+      </div>
+      <div class="row">
+        <div class="fld" style="flex:1"><label for="ez-e">Estación</label><select id="ez-e"></select></div>
+        <div class="fld" style="flex:1" id="ez-en-w" hidden><label for="ez-en">Nombre de la estación nueva</label><input id="ez-en" list="ez-sug" autocomplete="off" placeholder="Ej. Robot 6">
+          <datalist id="ez-sug">${sugeridas.map(e=>`<option value="${esc(e)}">`).join("")}</datalist></div>
+      </div>
       <div class="fld"><label for="ez-n">Nombre en el plano <span class="muted">(opcional)</span></label><input id="ez-n" autocomplete="off" value="${esc(v.etiqueta||"")}" placeholder="Por defecto: línea y estación"></div>
-      <p class="small muted" style="margin:0">La estación debe escribirse igual que en el BOM para que el plano muestre su estado.</p>
+      <p class="small muted" style="margin:0">Las líneas y estaciones nuevas se agregan al catálogo: son las que se eligen en el plan de producción y en el BOM.</p>
+      <div class="err" id="ez-err"></div>
       <div class="row" style="justify-content:space-between">${nueva?"<span></span>":`<button type="button" class="btn danger" id="ez-del">Quitar del plano</button>`}<button class="btn pri">${nueva?"Agregar":"Aplicar"}</button></div>
     </form></div></div>`;
   const close=()=>{ root.innerHTML=""; render(); };
+  const selL=document.getElementById("ez-l"), selE=document.getElementById("ez-e"), err=document.getElementById("ez-err");
+  const lineaElegida=()=>selL.value===NUEVA?ffv("ez-ln").toUpperCase():selL.value;
+  // Opciones de estación según la línea: toda la línea, sus estaciones del catálogo, la actual (si no está) y nueva.
+  // Al cambiar de línea solo se conserva la estación si también existe en la nueva.
+  const llenarEst=(prev,inicial)=>{
+    const l=selL.value===NUEVA?"":selL.value, ests=l?estacionesCat(l):[];
+    const actual=inicial&&prev&&!ests.some(e=>e.toLowerCase()===prev.toLowerCase())?prev:"";
+    selE.innerHTML=`<option value="">Toda la línea</option>${ests.map(e=>`<option ${prev&&e.toLowerCase()===prev.toLowerCase()?"selected":""}>${esc(e)}</option>`).join("")}
+      ${actual?`<option selected value="${esc(actual)}">${esc(actual)} (se agregará al catálogo)</option>`:""}<option value="${NUEVA}">+ Nueva estación…</option>`;
+    mostrar();
+  };
+  const mostrar=()=>{ document.getElementById("ez-ln-w").hidden=selL.value!==NUEVA; document.getElementById("ez-en-w").hidden=selE.value!==NUEVA; };
+  selL.onchange=()=>{ llenarEst(selE.value===NUEVA?"":selE.value); if(selL.value===NUEVA) document.getElementById("ez-ln").focus(); };
+  selE.onchange=()=>{ mostrar(); if(selE.value===NUEVA) document.getElementById("ez-en").focus(); };
+  llenarEst(v.estacion,true);
   document.getElementById("ez-x").onclick=close;
   const del=document.getElementById("ez-del");
   if(del) del.onclick=()=>{ const mb=mapaBorrador(); mb.zonas=mb.zonas.filter(x=>x.id!==z.id); LY.sel=null; close(); };
-  document.getElementById("f-ez").onsubmit=e=>{ e.preventDefault();
-    const val={linea:ffv("ez-l"),estacion:ffv("ez-e"),etiqueta:ffv("ez-n")}; if(!val.linea) return;
+  document.getElementById("f-ez").onsubmit=async e=>{ e.preventDefault(); err.textContent="";
+    const linea=lineaElegida(), estacion=selE.value===NUEVA?ffv("ez-en"):selE.value;
+    if(!linea) return err.textContent="Escribe el nombre de la línea nueva.";
+    if(selE.value===NUEVA&&!estacion) return err.textContent="Escribe el nombre de la estación nueva.";
     const mb=mapaBorrador();
+    const otra=mb.zonas.find(x=>x.id!==z?.id&&normEst(x.linea)===normEst(linea)&&normEst(x.estacion)===normEst(estacion));
+    if(otra) return err.textContent=`${estacion?"La estación "+estacion+" de "+linea:"La línea "+linea} ya está marcada en este mapa.`;
+    const btn=e.submitter||e.target.querySelector(".btn.pri"); btn.disabled=true;
+    if(!await agregarCatalogo(linea,estacion)){ btn.disabled=false; return; }
+    // Usa el nombre tal como quedó en el catálogo (p. ej. «Robot 4» aunque se escriba «robot 4»).
+    const lc=lineasCat().find(l=>l.toUpperCase()===linea.toUpperCase())||linea;
+    const ec=estacion?(estacionesCat(lc).find(x=>x.toLowerCase()===estacion.toLowerCase())||estacion):"";
+    const val={linea:lc,estacion:ec,etiqueta:ffv("ez-n")};
     if(nueva){ const id=newId(); mb.zonas.push(Object.assign({id},val,rect)); LY.sel=id; }
     else Object.assign(mb.zonas.find(x=>x.id===z.id)||{},val);
     close(); };
-  document.getElementById(lineas.length?"ez-e":"ez-l").focus();
+  (selL.value===NUEVA?document.getElementById("ez-ln"):selE).focus();
+}
+
+// Catálogo de líneas y estaciones (solo administrador): agregar y quitar. Lo que ya está en el plan, el BOM o el plano
+// se conserva al quitarlo del catálogo; solo deja de ofrecerse en las listas.
+function editarCatalogo(){
+  const root=document.getElementById("modal-root");
+  const items=()=>JSON.parse(JSON.stringify(S.config.lineas?.items||[])).sort((a,b)=>ordenNum(a.nombre,b.nombre));
+  const guardar=async list=>{ const ok=await safeWrite(()=>Store.set("config","lineas",{items:list})); if(ok) S.config.lineas={items:list}; pintar(); return ok; };
+  const usoLinea=l=>{ const n=Object.values(S.plan).filter(p=>p.linea===l).length, z=layoutCfg().mapas.reduce((k,m)=>k+(m.zonas||[]).filter(x=>x.linea===l).length,0);
+    return [n?`${n} plan${n>1?"es":""}`:"",z?`${z} zona${z>1?"s":""} del plano`:""].filter(Boolean).join(" y "); };
+  const usoEst=(l,e)=>{ const b=Object.values(S.bom).filter(x=>(x.items||[]).some(it=>normEst(it.estacion)===normEst(e))).length,
+    z=layoutCfg().mapas.reduce((k,m)=>k+(m.zonas||[]).filter(x=>x.linea===l&&normEst(x.estacion)===normEst(e)).length,0);
+    return [b?`${b} BOM`:"",z?`${z} zona${z>1?"s":""} del plano`:""].filter(Boolean).join(" y "); };
+  // Zonas ya marcadas en los planos cuya línea o estación aún no está en el catálogo (datos de antes del catálogo).
+  const pendientes=()=>{ const out=[], cat=items();
+    layoutCfg().mapas.forEach(m=>(m.zonas||[]).forEach(z=>{ const l=cat.find(x=>x.nombre.toUpperCase()===String(z.linea).toUpperCase());
+      const falta=!l||(z.estacion&&!(l.estaciones||[]).some(e=>normEst(e.nombre)===normEst(z.estacion)));
+      if(falta&&!out.some(o=>normEst(o.linea)===normEst(z.linea)&&normEst(o.estacion)===normEst(z.estacion))) out.push({linea:z.linea,estacion:z.estacion||""}); }));
+    return out; };
+  const pintar=()=>{ const list=items(), pend=pendientes();
+    root.innerHTML=`<div class="scrim"><div class="panel modal ly-catalogo" role="dialog" aria-modal="true" aria-labelledby="ct-t">
+      <div class="ph"><h3 id="ct-t">Líneas y estaciones</h3><button class="btn ghost" id="ct-x">Cerrar</button></div>
+      <div class="pb">
+        <form id="f-ct" class="row"><div class="fld" style="flex:1"><label for="ct-n">Línea nueva</label><input id="ct-n" required autocomplete="off" style="text-transform:uppercase"></div>
+          <div class="fld" style="flex:1"><label for="ct-d">Descripción <span class="muted">(opcional)</span></label><input id="ct-d" autocomplete="off"></div><button class="btn pri">Agregar línea</button></form>
+        ${pend.length?`<div class="note" style="margin-top:12px">${pend.length} línea${pend.length>1?"s o estaciones marcadas":" o estación marcada"} en los planos no ${pend.length>1?"están":"está"} en el catálogo: ${pend.slice(0,8).map(x=>esc(x.linea+(x.estacion?" · "+x.estacion:""))).join(", ")}${pend.length>8?"…":""}.
+          <button class="btn" id="ct-plano" style="margin-left:8px">Agregar${pend.length>1?"las":"la"}</button></div>`:""}
+        <div class="ct-lista">${list.length?list.map(l=>`<div class="ct-linea">
+          <div class="row"><b>${esc(l.nombre)}</b><span class="muted small">${esc(l.descripcion||"")}</span><button class="btn danger" style="margin-left:auto" data-ct-dl="${esc(l.nombre)}">Quitar línea</button></div>
+          <div class="ct-ests">${(l.estaciones||[]).sort((a,b)=>ordenNum(a.nombre,b.nombre)).map(e=>`<span class="ct-est">${esc(e.nombre)}<button type="button" aria-label="Quitar ${esc(e.nombre)}" data-ct-de='${esc(JSON.stringify([l.nombre,e.nombre]))}'>×</button></span>`).join("")||'<span class="muted small">Sin estaciones</span>'}
+            <form class="ct-add" data-ct-ae="${esc(l.nombre)}"><input aria-label="Estación nueva en ${esc(l.nombre)}" placeholder="+ Estación" list="ct-sug" autocomplete="off"></form></div>
+        </div>`).join(""):'<p class="muted">Aún no hay líneas.</p>'}</div>
+        <datalist id="ct-sug">${estacionesBom().filter(e=>!enCatalogo(e)).map(e=>`<option value="${esc(e)}">`).join("")}</datalist>
+        <p class="small muted" style="margin:0">También se agregan al marcar una zona en el plano. Quitar una línea o estación no cambia el plan, el BOM ni el plano: solo deja de ofrecerse en las listas.</p>
+      </div></div></div>`;
+    document.getElementById("ct-x").onclick=()=>{ root.innerHTML=""; render(); };
+    const bp=document.getElementById("ct-plano");
+    if(bp) bp.onclick=async()=>{ const l2=items();
+      pend.forEach(x=>{ const ln=String(x.linea).trim(); let l=l2.find(y=>y.nombre.toUpperCase()===ln.toUpperCase());
+        if(!l){ l={nombre:ln,descripcion:"",estaciones:[]}; l2.push(l); } l.estaciones=l.estaciones||[];
+        if(x.estacion&&!l.estaciones.some(e=>normEst(e.nombre)===normEst(x.estacion))) l.estaciones.push({nombre:x.estacion}); });
+      if(await guardar(l2)) toast("Líneas y estaciones del plano agregadas al catálogo."); };
+    document.getElementById("f-ct").onsubmit=async e=>{ e.preventDefault(); const n=ffv("ct-n").toUpperCase();
+      if(list.some(l=>l.nombre.toUpperCase()===n)) return toast(`La línea ${n} ya está en el catálogo.`);
+      if(await guardar([...list,{nombre:n,descripcion:ffv("ct-d"),estaciones:[]}])) toast(`Línea ${n} agregada.`); };
+    root.querySelectorAll("[data-ct-ae]").forEach(f=>f.onsubmit=async e=>{ e.preventDefault(); const est=f.querySelector("input").value.trim(); if(!est) return;
+      const l=list.find(x=>x.nombre===f.dataset.ctAe); l.estaciones=l.estaciones||[];
+      if(l.estaciones.some(x=>x.nombre.toLowerCase()===est.toLowerCase())) return toast(`${l.nombre} ya tiene la estación ${est}.`);
+      l.estaciones.push({nombre:est}); if(await guardar(list)){ toast(`Estación ${est} agregada a ${l.nombre}.`); root.querySelector(`[data-ct-ae="${CSS.escape(l.nombre)}"] input`)?.focus(); } });
+    root.querySelectorAll("[data-ct-dl]").forEach(b=>b.onclick=()=>{ const n=b.dataset.ctDl, u=usoLinea(n);
+      confirmBox(`¿Quitar la línea ${n} y sus estaciones del catálogo?${u?` Se usa en ${u}; eso se conserva.`:""}`,"Quitar",()=>guardar(list.filter(x=>x.nombre!==n)),pintar); });
+    root.querySelectorAll("[data-ct-de]").forEach(b=>b.onclick=()=>{ const [n,e]=JSON.parse(b.dataset.ctDe), u=usoEst(n,e);
+      const quitar=async()=>{ const l=list.find(x=>x.nombre===n); l.estaciones=l.estaciones.filter(x=>x.nombre!==e); await guardar(list); };
+      if(u) confirmBox(`¿Quitar la estación ${e} de ${n}? Se usa en ${u}; eso se conserva.`,"Quitar",quitar,pintar); else quitar(); });
+  };
+  pintar();
 }
 
 /* ---------- Flujo sobre el plano ---------- */
